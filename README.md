@@ -18,6 +18,19 @@ GetOuters() depends on the OUTERSKEY worksheet. To use OUTERSKEY, you need to op
 
 CalcSumOuters() depends on the data that GetOuters() will add. So, you can only run CalcSumOuters() after GetOuters() has been run.
 
+### First Time Setup To Run Macros:
+Enable the Developer Tab: If not already enabled, enable the Developer tab in Excel.
+
+Go to File > Options > Customize Ribbon.
+Check Developer in the right-hand list.
+
+### Steps to Use These Scripts
+Open the VBA editor (Alt + F11).
+Insert a new module (Insert > Module).
+Paste the code/script into the module.
+Close the VBA editor and return to Excel.
+Run the macro (Alt + F8, select \[SCRIPT_NAME], then click "Run").
+
 ### Send scripts via email
 .vb scripts cannot be attached to an email because the filename flags up as potentially dangerous.
 To getaround this, we can rename each file extention to .txt
