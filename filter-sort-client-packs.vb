@@ -21,7 +21,7 @@ Sub FilterSortClientPacks()
     Set ws = ThisWorkbook.Sheets("Special1") ' Update to your sheet name
 
     ' Step 1: Keep only the specified columns
-    keepList = Array("PARENT_NM", "CORP_CD", "WORK_UNIT_CD", "STMT_CNT", "INSERT_CNT", "REM_MC_CNT", "PLAN_TYPE") ' Desired column names
+    keepList = Array("PARENT_NM", "CORP_CD", "WORK_UNIT_CD", "STMT_CNT", "INSERT_CNT", "REM_MC_CNT", "PLAN_TYPE_CD") ' Desired column names
     Set headers = ws.Rows(1) ' Assuming headers are in row 1
 
     ' Delete columns not in keepList

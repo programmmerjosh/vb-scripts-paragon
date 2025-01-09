@@ -5,7 +5,7 @@
 ' And don't forget to run the GetOuters() script before this one.
 
 Sub CalcSumOuters()
-    Dim wsDataset As Worksheet
+    Dim ws As Worksheet
     Dim wsSummary As Worksheet
     Dim outerCol As Range
     Dim stmtCNCol As Range, remMCCol As Range
@@ -22,12 +22,12 @@ Sub CalcSumOuters()
     Dim idx As Long
     
     ' Set the dataset worksheet
-    Set wsDataset = ThisWorkbook.Sheets("Special1") ' Update to your dataset sheet name
+    Set ws = ThisWorkbook.Sheets("Special1") ' Update to your dataset sheet name
     
     ' Find the columns for OUTER, STMT_CNT, and REM_MC_CNT
-    Set outerCol = wsDataset.Rows(1).Find("OUTER")
-    Set stmtCNCol = wsDataset.Rows(1).Find("STMT_CNT")
-    Set remMCCol = wsDataset.Rows(1).Find("REM_MC_CNT") ' Column for REM_MC_CNT
+    Set outerCol = ws.Rows(1).Find("OUTER")
+    Set stmtCNCol = ws.Rows(1).Find("STMT_CNT")
+    Set remMCCol = ws.Rows(1).Find("REM_MC_CNT") ' Column for REM_MC_CNT
 
     ' Validate the columns exist
     If outerCol Is Nothing Or stmtCNCol Is Nothing Or remMCCol Is Nothing Then
@@ -36,7 +36,7 @@ Sub CalcSumOuters()
     End If
 
     ' Find the last row of data
-    lastRow = wsDataset.Cells(wsDataset.Rows.Count, outerCol.Column).End(xlUp).Row
+    lastRow = ws.Cells(ws.Rows.Count, outerCol.Column).End(xlUp).Row
     
     ' Initialize the arrays for Outer values and its sum
     ReDim outerArray(1 To 1) ' Initially size to 1 element
@@ -44,9 +44,9 @@ Sub CalcSumOuters()
     
     ' Loop through each row to calculate the sum of OUTER
     For i = 2 To lastRow
-        outerValue = wsDataset.Cells(i, outerCol.Column).Value
-        stmtValue = wsDataset.Cells(i, stmtCNCol.Column).Value
-        remMCValue = wsDataset.Cells(i, remMCCol.Column).Value ' Get REM_MC_CNT value
+        outerValue = ws.Cells(i, outerCol.Column).Value
+        stmtValue = ws.Cells(i, stmtCNCol.Column).Value
+        remMCValue = ws.Cells(i, remMCCol.Column).Value ' Get REM_MC_CNT value
 
         ' If REM_MC_CNT has a value, use it instead of STMT_CNT
         If Not IsEmpty(remMCValue) And IsNumeric(remMCValue) Then

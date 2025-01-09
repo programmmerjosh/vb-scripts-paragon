@@ -4,7 +4,7 @@
 'IMPORTANT NOTE: Don't forget to change the sheet name to, "Special1" before running this script.
 
 Sub GetOuters()
-    Dim wsDataset As Worksheet
+    Dim ws As Worksheet
     Dim wsOutersKey As Worksheet
     Dim datasetCORPCol As Range, outerCol As Range
     Dim outC5OuterCol As Range, outC4OuterCol As Range, outDLOuterCol As Range
@@ -16,22 +16,22 @@ Sub GetOuters()
     Dim entry As Variant
 
     ' Set the dataset and OUTERSKEY worksheets
-    Set wsDataset = ThisWorkbook.Sheets("Special1") ' Update to your dataset sheet name
+    Set ws = ThisWorkbook.Sheets("Special1") ' Update to your dataset sheet name
     Set wsOutersKey = ThisWorkbook.Sheets("OUTERSKEY") ' Update to your OUTERSKEY sheet name
 
     ' Find the relevant columns in the dataset
-    Set datasetCORPCol = wsDataset.Rows(1).Find("CORP_CD")
-    Set planTypeCol = wsDataset.Rows(1).Find("PLAN_TYPE")
+    Set datasetCORPCol = ws.Rows(1).Find("CORP_CD")
+    Set planTypeCol = ws.Rows(1).Find("PLAN_TYPE_CD")
 
     ' Check if OUTER column exists
-    Set outerCol = wsDataset.Rows(1).Find("OUTER")
+    Set outerCol = ws.Rows(1).Find("OUTER")
 
     ' If OUTER column doesn't exist, add it at the next empty column
     If outerCol Is Nothing Then
         Dim lastColumn As Long
-        lastColumn = wsDataset.Cells(1, wsDataset.Columns.Count).End(xlToLeft).Column + 1
-        wsDataset.Cells(1, lastColumn).Value = "OUTER"
-        Set outerCol = wsDataset.Cells(1, lastColumn) ' Now set outerCol to the newly created column
+        lastColumn = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column + 1
+        ws.Cells(1, lastColumn).Value = "OUTER"
+        Set outerCol = ws.Cells(1, lastColumn) ' Now set outerCol to the newly created column
     End If
 
     ' Find the relevant columns in OUTERSKEY
@@ -42,7 +42,7 @@ Sub GetOuters()
 
     ' Validate columns exist
     If datasetCORPCol Is Nothing Or planTypeCol Is Nothing Then
-        MsgBox "Required columns (CORP_CD, PLAN_TYPE) not found in the dataset!", vbExclamation
+        MsgBox "Required columns (CORP_CD, PLAN_TYPE_CD) not found in the dataset!", vbExclamation
         Exit Sub
     End If
     If outerCORPCol Is Nothing Or outC5OuterCol Is Nothing Or outC4OuterCol Is Nothing Or outDLOuterCol Is Nothing Then
@@ -70,10 +70,10 @@ Sub GetOuters()
     Next i
 
     ' Map the OUTERSKEY entries to the dataset
-    lastRowDataset = wsDataset.Cells(wsDataset.Rows.Count, datasetCORPCol.Column).End(xlUp).Row
+    lastRowDataset = ws.Cells(ws.Rows.Count, datasetCORPCol.Column).End(xlUp).Row
     For i = 2 To lastRowDataset
-        datasetCORPValue = Trim(wsDataset.Cells(i, datasetCORPCol.Column).Value)
-        planTypeValue = Trim(wsDataset.Cells(i, planTypeCol.Column).Value)
+        datasetCORPValue = Trim(ws.Cells(i, datasetCORPCol.Column).Value)
+        planTypeValue = Trim(ws.Cells(i, planTypeCol.Column).Value)
         mappedOuter = ""
 
         ' Check sortedOuters starting from the longest CORP_CD
@@ -94,16 +94,16 @@ Sub GetOuters()
         Next matchLength
 
         ' Update the OUTER column
-        wsDataset.Cells(i, outerCol.Column).Value = mappedOuter
+        ws.Cells(i, outerCol.Column).Value = mappedOuter
     Next i
 
     ' Convert OUTER column to text format
     For i = 2 To lastRowDataset
-        wsDataset.Cells(i, outerCol.Column).Value = CStr(wsDataset.Cells(i, outerCol.Column).Value) ' Convert to string
+        ws.Cells(i, outerCol.Column).Value = CStr(ws.Cells(i, outerCol.Column).Value) ' Convert to string
     Next i
 
     ' Apply Text format to the entire OUTER column
-    wsDataset.Columns(outerCol.Column).NumberFormat = "@"
+    ws.Columns(outerCol.Column).NumberFormat = "@"
 
     MsgBox "OUTERSKEY mapping to DATASET completed!", vbInformation
 End Sub
