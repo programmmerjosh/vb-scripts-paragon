@@ -130,7 +130,7 @@ Sub FilterDataAndCreateSummary()
         For matchLength = 6 To 1 Step -1
             For Each entry In sortedOuters(matchLength)
                 If Left(datasetCORPValue, Len(entry(0))) = entry(0) Then
-                    If planTypeValue = "U" Or planTypeValue = "F" Then
+                    If planTypeValue = "V" Or planTypeValue = "F" Then
                         mappedOuter = entry(2) ' Use C4_OUTER
                     ElseIf entry(1) <> "" Then
                         mappedOuter = entry(1) ' Use C5_OUTER
