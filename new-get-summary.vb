@@ -175,5 +175,56 @@ Sub NewGetSummary()
     ' Convert columns to text format
     wsFilteredData.Columns(outerCol.Column).NumberFormat = "@"
     wsFilteredData.Columns(stockLocationCol.Column).NumberFormat = "@"
+
+' /*
+' STEP 3: HIGHLIGHT WORK ORDERS AND INSERTS
+' */
+    Dim insertCntCol As Range
+    Dim insertCntValue As Variant
+    
+    ' Find the columns for WORK_UNIT_CD and INSERT_CNT
+    Set workUnitCol = wsFilteredData.Rows(1).Find("WORK_UNIT_CD")
+    Set insertCntCol = wsFilteredData.Rows(1).Find("INSERT_CNT")
+    
+    ' Validate the columns exist
+    If workUnitCol Is Nothing Or insertCntCol Is Nothing Then
+        MsgBox "Required columns (WORK_UNIT_CD, INSERT_CNT) not found!", vbExclamation
+        Exit Sub
+    End If
+    
+    ' Loop through each row to check the INSERT_CNT value
+    For i = 2 To lastRow
+        insertCntValue = wsFilteredData.Cells(i, insertCntCol.Column).Value
+        
+        ' Check if INSERT_CNT is greater than 9
+        If IsNumeric(insertCntValue) And insertCntValue > 9 Then
+            ' Highlight WORK_UNIT_CD with rgb(255,111,145)
+            wsFilteredData.Cells(i, workUnitCol.Column).Interior.Color = RGB(255, 111, 145)
+            ' Highlight INSERT_CNT with rgb(255,171,96)
+            wsFilteredData.Cells(i, insertCntCol.Column).Interior.Color = RGB(255, 171, 96)
+        End If
+    Next i
+
+' /*
+' STEP 4: HIGHLIGHT REMAKES
+' */
+    Dim remCountCol As Range
+
+    ' Find the REM_MC_CNT column
+    Set remCountCol = wsFilteredData.Rows(1).Find("REM_MC_CNT")
+
+    ' Validate that REM_MC_CNT column exists
+    If remCountCol Is Nothing Then
+        MsgBox "The REM_MC_CNT column was not found!", vbExclamation
+        Exit Sub
+    End If
+
+    ' Loop through each row in the REM_MC_CNT column
+    For i = 2 To lastRow ' Assuming headers are in row 1
+        If wsFilteredData.Cells(i, remCountCol.Column).Value <> "" Then
+            ' Highlight the row up to the last column
+            wsFilteredData.Range(wsFilteredData.Cells(i, 1), wsFilteredData.Cells(i, lastColumn)).Interior.Color = RGB(255, 255, 0) ' Yellow color
+        End If
+    Next i
     
 End Sub
