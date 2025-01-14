@@ -220,105 +220,88 @@ Sub FilterDataAndCreateSummary()
 ' */
 
     Dim wsSummary As Worksheet
-    Dim stmtCNCol As Range
-    Dim outC5StockCol As Range, outC4StockCol As Range, outDLStockCol As Range
-    Dim outerValue As String, stmtValue As Double
-    Dim stockLocation As String
-    Dim summaryData As Collection
-    Dim key As Variant
+    Dim stmtCNCol As Range, remMCCol As Range
+    Dim outerValue As String, stmtValue As Double, remMCValue As Variant
     Dim summaryRow As Long
     Dim idx As Long
+    Dim outerArray() As Variant, stmtSumArray() As Double, stockArray() As Variant
+    Dim stockLocation As String
     Dim foundOuter As Boolean
-
-    ' Find the relevant columns in the dataset
+    
+    ' Find the relevant columns
     Set stmtCNCol = wsFilteredData.Rows(1).Find("STMT_CNT")
-
-    ' Find the relevant columns in OUTERSKEY
-    Set outC5StockCol = wsOutersKey.Rows(1).Find("C5_STOCK_LOCATION")
-    Set outC4StockCol = wsOutersKey.Rows(1).Find("C4_STOCK_LOCATION")
-    Set outDLStockCol = wsOutersKey.Rows(1).Find("DL_STOCK_LOCATION")
-
-    ' Validate the columns exist
-    If stmtCNCol Is Nothing Or _
-       outC5StockCol Is Nothing Or outC4StockCol Is Nothing Or outDLStockCol Is Nothing Then
-        MsgBox "Required columns not found!", vbExclamation
+    Set remMCCol = wsFilteredData.Rows(1).Find("REM_MC_CNT")
+    ' Set outerCol = wsFilteredData.Rows(1).Find("OUTER") 'declared elsewhere in code
+    'Set planTypeCol = wsFilteredData.Rows(1).Find("PLAN_TYPE_CD") 'declared elsewhere in code
+    
+    ' Validate the columns exist in wsFilteredData
+    If outerCol Is Nothing Or stmtCNCol Is Nothing Or remMCCol Is Nothing Or planTypeCol Is Nothing Then
+        MsgBox "Required columns (OUTER, STMT_CNT, REM_MC_CNT, PLAN_TYPE_CD) not found!", vbExclamation
         Exit Sub
     End If
-
-    ' Initialize the sortedOuters array
-    For matchLength = 1 To 6
-        Set sortedOuters(matchLength) = New Collection
-    Next matchLength
-
-    ' Populate sortedOuters based on CORP_CD length
-    lastRowOutersKey = wsOutersKey.Cells(wsOutersKey.Rows.Count, outerCORPCol.Column).End(xlUp).Row
-    For i = 2 To lastRowOutersKey
-        currentCORP = Trim(wsOutersKey.Cells(i, outerCORPCol.Column).Value)
-        matchLength = Len(currentCORP)
-        If matchLength >= 1 And matchLength <= 6 Then
-            sortedOuters(matchLength).Add Array(currentCORP, _
-                                                wsOutersKey.Cells(i, outC5OuterCol.Column).Value, _
-                                                wsOutersKey.Cells(i, outC4OuterCol.Column).Value, _
-                                                wsOutersKey.Cells(i, outDLOuterCol.Column).Value, _
-                                                wsOutersKey.Cells(i, outC5StockCol.Column).Value, _
-                                                wsOutersKey.Cells(i, outC4StockCol.Column).Value, _
-                                                wsOutersKey.Cells(i, outDLStockCol.Column).Value)
-        End If
-    Next i
-
-    ' Create a collection for summarization
-    Set summaryData = New Collection
-
-    ' Loop through the dataset
-    lastRowDataset = wsFilteredData.Cells(wsFilteredData.Rows.Count, datasetCORPCol.Column).End(xlUp).Row
+    
+    ' Find the last rows
+    lastRowDataset = wsFilteredData.Cells(wsFilteredData.Rows.Count, outerCol.Column).End(xlUp).Row
+    lastRowOutersKey = wsOutersKey.Cells(wsOutersKey.Rows.Count, 1).End(xlUp).Row
+    
+    ' Initialize arrays for OUTER values, SUM values, and STOCK_LOCATION
+    ReDim outerArray(1 To 1)
+    ReDim stmtSumArray(1 To 1)
+    ReDim stockArray(1 To 1)
+    
+    ' Loop through each row in wsFilteredData to calculate sums and map STOCK_LOCATION
     For i = 2 To lastRowDataset
-        Dim remCountValue As Variant
-        remCountValue = wsFilteredData.Cells(i, remCountCol.Column).Value
-        datasetCORPValue = Trim(wsFilteredData.Cells(i, datasetCORPCol.Column).Value)
-        planTypeValue = Trim(wsFilteredData.Cells(i, planTypeCol.Column).Value)
+        outerValue = wsFilteredData.Cells(i, outerCol.Column).Value
         stmtValue = wsFilteredData.Cells(i, stmtCNCol.Column).Value
-        outerValue = ""
-        stockLocation = ""
-
+        remMCValue = wsFilteredData.Cells(i, remMCCol.Column).Value
+        planTypeValue = wsFilteredData.Cells(i, planTypeCol.Column).Value
+        
         ' If REM_MC_CNT has a value, use it instead of STMT_CNT
-        If Not IsEmpty(remCountValue) And IsNumeric(remCountValue) Then
-            stmtValue = remCountValue
+        If Not IsEmpty(remMCValue) And IsNumeric(remMCValue) Then
+            stmtValue = remMCValue
         End If
 
-        ' Match OUTER and STOCK_LOCATION
-        For matchLength = 6 To 1 Step -1
-            For Each entry In sortedOuters(matchLength)
-                If Left(datasetCORPValue, Len(entry(0))) = entry(0) Then
-                    If planTypeValue = "V" Or planTypeValue = "F" Then
-                        outerValue = entry(2) ' Use C4_OUTER
-                        stockLocation = entry(5) ' Use C4_STOCK_LOCATION
-                    ElseIf entry(1) <> "" Then
-                        outerValue = entry(1) ' Use C5_OUTER
-                        stockLocation = entry(4) ' Use C5_STOCK_LOCATION
-                    Else
-                        outerValue = entry(3) ' Use DL_OUTER
-                        stockLocation = entry(6) ' Use DL_STOCK_LOCATION
-                    End If
-                    Exit For
-                End If
-            Next entry
-            If outerValue <> "" Then Exit For
-        Next matchLength
-
-        ' Summarize data
         If outerValue <> "" Then
-            key = outerValue & "|" & stockLocation
             foundOuter = False
-            For idx = 1 To summaryData.Count
-                If summaryData(idx)(0) = key Then
-                    summaryData(idx)(1) = summaryData(idx)(1) + stmtValue
+            stockLocation = ""
+            
+            ' Check if OUTER value already exists in the array
+            For idx = 1 To UBound(outerArray)
+                If outerArray(idx) = outerValue Then
+                    stmtSumArray(idx) = stmtSumArray(idx) + stmtValue
                     foundOuter = True
                     Exit For
                 End If
             Next idx
 
+            ' If OUTER value not found, add new entry and determine STOCK_LOCATION
             If Not foundOuter Then
-                summaryData.Add Array(key, stmtValue)
+                ReDim Preserve outerArray(1 To UBound(outerArray) + 1)
+                ReDim Preserve stmtSumArray(1 To UBound(stmtSumArray) + 1)
+                ReDim Preserve stockArray(1 To UBound(stockArray) + 1)
+                
+                outerArray(UBound(outerArray)) = outerValue
+                stmtSumArray(UBound(stmtSumArray)) = stmtValue
+                
+                ' Map STOCK_LOCATION based on OUTER and PLAN_TYPE_CD
+                For idx = 2 To lastRowOutersKey
+                    If planTypeValue = "V" Or planTypeValue = "F" Then
+                        If wsOutersKey.Cells(idx, 3).Value = outerValue Then ' Match in C4_OUTER
+                            stockLocation = wsOutersKey.Cells(idx, 6).Value ' C4_STOCK_LOCATION
+                            Exit For
+                        End If
+                    Else
+                        If wsOutersKey.Cells(idx, 2).Value = outerValue Then ' Match in C5_OUTER
+                            stockLocation = wsOutersKey.Cells(idx, 5).Value ' C5_STOCK_LOCATION
+                            Exit For
+                        ElseIf wsOutersKey.Cells(idx, 4).Value = outerValue Then ' Match in DL_OUTER
+                            stockLocation = wsOutersKey.Cells(idx, 7).Value ' DL_STOCK_LOCATION
+                            Exit For
+                        End If
+                    End If
+                Next idx
+                
+                stockArray(UBound(stockArray)) = stockLocation
             End If
         End If
     Next i
@@ -334,17 +317,16 @@ Sub FilterDataAndCreateSummary()
     End If
     On Error GoTo 0
 
-    ' Write headers
+    ' Write the summary to the new worksheet
     wsSummary.Cells(1, 1).Value = "OUTER"
     wsSummary.Cells(1, 2).Value = "SUM"
     wsSummary.Cells(1, 3).Value = "STOCK_LOCATION"
 
-    ' Write data to summary worksheet
     summaryRow = 2
-    For idx = 1 To summaryData.Count
-        wsSummary.Cells(summaryRow, 1).Value = Split(summaryData(idx)(0), "|")(0)
-        wsSummary.Cells(summaryRow, 2).Value = summaryData(idx)(1)
-        wsSummary.Cells(summaryRow, 3).Value = Split(summaryData(idx)(0), "|")(1)
+    For idx = 1 To UBound(outerArray)
+        wsSummary.Cells(summaryRow, 1).Value = outerArray(idx)
+        wsSummary.Cells(summaryRow, 2).Value = stmtSumArray(idx)
+        wsSummary.Cells(summaryRow, 3).Value = stockArray(idx)
         summaryRow = summaryRow + 1
     Next idx
 
