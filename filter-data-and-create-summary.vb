@@ -1,10 +1,45 @@
 Sub FilterDataAndCreateSummary()
 
 ' /*
-' STEP 1: EXPORT DESIRED COLUMNS TO NEW WORKSHEET CALLED FilteredData
+' STEP 1: REMOVE DUPLICATE HEADING ROWS
 ' */
 
     Dim wsSpecial As Worksheet, wsFilteredData As Worksheet
+
+    ' Set source worksheet
+    Set wsSpecial = ThisWorkbook.Sheets("Special") ' Update to your sheet name
+
+    Dim searchRange As Range, foundCell As Range
+    Dim firstAddress As String
+
+    ' Define the initial range to search in (first column, excluding the header row)
+    Set searchRange = wsSpecial.Range(wsSpecial.Cells(2, 1), wsSpecial.Cells(wsSpecial.Rows.Count, 1))
+
+    ' Use Find to locate occurrences of "PARENT_NM" in the first column
+    Set foundCell = searchRange.Find(What:="PARENT_NM", LookIn:=xlValues, LookAt:=xlWhole)
+
+    ' Loop through all matches and delete rows
+    If Not foundCell Is Nothing Then
+        firstAddress = foundCell.Address ' Store the first match to avoid infinite loop
+        Do
+            ' Delete the row
+            wsSpecial.Rows(foundCell.Row).Delete
+
+            ' Redefine the search range after deleting the row
+            Set searchRange = wsSpecial.Range(wsSpecial.Cells(2, 1), wsSpecial.Cells(wsSpecial.Rows.Count, 1))
+
+            ' Look for the next occurrence
+            Set foundCell = searchRange.Find(What:="PARENT_NM", After:=searchRange.Cells(1), LookIn:=xlValues, LookAt:=xlWhole)
+
+            ' Exit if no more matches are found
+            If foundCell Is Nothing Then Exit Do
+        Loop While foundCell.Address <> firstAddress
+    End If
+
+' /*
+' STEP 2: EXPORT DESIRED COLUMNS TO NEW WORKSHEET CALLED FilteredData
+' */
+
     Dim colName As Variant
     Dim headers As Range
     Dim keepList As Variant
@@ -12,9 +47,6 @@ Sub FilterDataAndCreateSummary()
     Dim workUnitCol As Range
     Dim lastRow As Long
     Dim targetCol As Long
-
-    ' Set source worksheet
-    Set wsSpecial = ThisWorkbook.Sheets("Special") ' Update to your sheet name
 
     ' Create a new worksheet for the filtered data
     Set wsFilteredData = ThisWorkbook.Sheets.Add
@@ -24,7 +56,7 @@ Sub FilterDataAndCreateSummary()
     keepList = Array("PARENT_NM", "CORP_CD", "WORK_UNIT_CD", "STMT_CNT", "INSERT_CNT", "REM_MC_CNT", "PLAN_TYPE_CD") ' Desired column names
     Set headers = wsSpecial.Rows(1) ' Assuming headers are in row 1
 
-    ' Step 1: Copy the keepList columns to the new worksheet
+    ' Copy the keepList columns to the new worksheet
     targetCol = 1
     For Each colName In keepList
         For i = 1 To headers.Columns.Count
@@ -36,7 +68,7 @@ Sub FilterDataAndCreateSummary()
         Next i
     Next colName
 
-    ' Step 2: Set reference for WORK_UNIT_CD column
+    ' Set reference for WORK_UNIT_CD column
     Set workUnitCol = wsFilteredData.Rows(1).Find("WORK_UNIT_CD")
 
     ' Validate that WORK_UNIT_CD column exists
@@ -45,7 +77,7 @@ Sub FilterDataAndCreateSummary()
         Exit Sub
     End If
 
-    ' Step 3: Sort data by WORK_UNIT_CD
+    ' Sort data by WORK_UNIT_CD
     lastRow = wsFilteredData.Cells(wsFilteredData.Rows.Count, workUnitCol.Column).End(xlUp).Row
     wsFilteredData.Sort.SortFields.Clear
     wsFilteredData.Sort.SortFields.Add Key:=wsFilteredData.Columns(workUnitCol.Column), Order:=xlAscending ' Sort by WORK_UNIT_CD
@@ -59,8 +91,9 @@ Sub FilterDataAndCreateSummary()
     End With
 
 ' /*
-' STEP 2: GET OUTERS BASED ON CORP_CD
+' STEP 3: GET OUTERS BASED ON CORP_CD
 ' */
+
     Dim wsOutersKey As Worksheet
     Dim datasetCORPCol As Range, outerCol As Range
     Dim planTypeCol As Range
@@ -147,7 +180,7 @@ Sub FilterDataAndCreateSummary()
         wsFilteredData.Cells(i, outerCol.Column).Value = mappedOuter
     Next i
 
-    ' Apply formatting
+    ' Apply formatting to wsFilteredData
     With wsFilteredData
         
         ' Left-align first column
@@ -165,8 +198,9 @@ Sub FilterDataAndCreateSummary()
     End With
 
 ' /*
-' STEP 3: HIGHLIGHT WORK ORDERS AND INSERTS WHERE INSERTS > 4
+' STEP 4: HIGHLIGHT WORK ORDERS AND INSERTS WHERE INSERTS > 4
 ' */
+
     Dim insertCntCol As Range
     Dim insertCntValue As Variant
     
@@ -194,8 +228,9 @@ Sub FilterDataAndCreateSummary()
     Next i
 
 ' /*
-' STEP 4: HIGHLIGHT REMAKES
+' STEP 5: HIGHLIGHT REMAKES
 ' */
+
     Dim remCountCol As Range
 
     ' Find the REM_MC_CNT column
@@ -216,7 +251,7 @@ Sub FilterDataAndCreateSummary()
     Next i
 
 ' /*
-' STEP 5: CALCULATE A SUMMARY
+' STEP 6: CALCULATE A SUMMARY
 ' */
 
     Dim wsSummary As Worksheet
@@ -232,7 +267,7 @@ Sub FilterDataAndCreateSummary()
     Set stmtCNCol = wsFilteredData.Rows(1).Find("STMT_CNT")
     Set remMCCol = wsFilteredData.Rows(1).Find("REM_MC_CNT")
     ' Set outerCol = wsFilteredData.Rows(1).Find("OUTER") 'declared elsewhere in code
-    'Set planTypeCol = wsFilteredData.Rows(1).Find("PLAN_TYPE_CD") 'declared elsewhere in code
+    ' Set planTypeCol = wsFilteredData.Rows(1).Find("PLAN_TYPE_CD") 'declared elsewhere in code
     
     ' Validate the columns exist in wsFilteredData
     If outerCol Is Nothing Or stmtCNCol Is Nothing Or remMCCol Is Nothing Or planTypeCol Is Nothing Then
@@ -330,7 +365,7 @@ Sub FilterDataAndCreateSummary()
         summaryRow = summaryRow + 1
     Next idx
 
-    ' Apply formatting
+    ' Apply formatting to wsSummary
     With wsSummary
         Dim summaryLastCol As Long, summaryLastRow As Long
         summaryLastCol = .Cells(1, .Columns.Count).End(xlToLeft).Column
