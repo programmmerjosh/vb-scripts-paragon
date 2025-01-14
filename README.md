@@ -4,19 +4,23 @@ CREDIT: Joshua van Niekerk (and ChatGPT)
 I have leveraged ChatGPT to code up several scripts for me (for my Workflow Coordinator role at Paragon).
 These scripts serve the purpose of calculating and identifying what stock to order (from the warehouse) before the print reaches the machines in production.
 
-### Application:
-Typically, it would be best to run one of the SORT scripts first: FilterSortClientCorpPacks() OR FilterSortClientPacks().
-HighlightRemakes() is not essential, but useful for visual purposes.
-HighlightForInserts() is great to highlight work-orders (to order) as they require inserts to be staged.
-GetOuters() identifies (based on CORP_CD) which outers each work-order will need.
-CalcSumOuters() will create a summary of the total sum of each outer we will need to enclose all the jobs on the active worksheet.
+### Specification:
+FilterDataAndCreateSummary (The main method) does several things, namely:
+1. REMOVE DUPLICATE HEADING ROWS
+2. EXPORT DESIRED COLUMNS TO NEW WORKSHEET CALLED FilteredData
+3. GET OUTERS BASED ON CORP_CD
+4. HIGHLIGHT WORK ORDERS AND INSERTS WHERE INSERTS > 4
+5. HIGHLIGHT REMAKES (yellow)
+6. CALCULATE A SUMMARY
 
 ### Dependencies:
-To perform/run any of these scripts, you need to rename the active worksheet "Special1"
-
-GetOuters() depends on the OUTERSKEY worksheet. To use OUTERSKEY, you need to open up outers-key.xls. Copy the OUTERSKEY data and paste it in a new worksheet on the Paragon SLA excel spreadhseet and rename the worksheet "OUTERSKEY".
-
-CalcSumOuters() depends on the data that GetOuters() will add. So, you can only run CalcSumOuters() after GetOuters() has been run.
+To perform/run any of these scripts, you need:
+1. To rename the active worksheet "Special"
+2. The OUTERSKEY worksheet
+    a. Open up outers-key.xls
+    b. Copy the OUTERSKEY data (from the outers-key.xls)
+    c. Paste it in a new worksheet on the Paragon SLA excel spreadhseet
+    d. Rename the worksheet "OUTERSKEY"
 
 ### First Time Setup To Run Macros:
 Enable the Developer Tab: If not already enabled, enable the Developer tab in Excel.
@@ -24,15 +28,19 @@ Enable the Developer Tab: If not already enabled, enable the Developer tab in Ex
 Go to File > Options > Customize Ribbon.
 Check Developer in the right-hand list.
 
-### Steps to Use These Scripts
-Open the VBA editor (Alt + F11).
-Insert a new module (Insert > Module).
-Paste the code/script into the module.
-Close the VBA editor and return to Excel.
-Run the macro (Alt + F8, select \[SCRIPT_NAME], then click "Run").
+### How To Add A New Script:
+1. Alt + F11 to open the VBA editor.
+2. Insert a new module (Insert > Module).
+3. Paste the code/script into the module.
+4. Close the VBA editor and return to Excel.
+5. Run the macro 
+    a. Alt + F8 
+    b. Select FilterDataAndCreateSummary
+    c. (Optional) Click the options button to add a shortcut key to run the script.
+    d. Click "Run".
 
 ### Send scripts via email
 .vb scripts cannot be attached to an email because the filename flags up as potentially dangerous.
-To getaround this, we can rename each file extention to .txt
+To get around this, we can rename each file extention to .txt
 EXAMPLE: rename calc-sum-outers.vb to calc-sum-outers.txt
 Then we can attach the file to an email
