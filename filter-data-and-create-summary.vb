@@ -18,7 +18,7 @@ Sub FilterDataAndCreateSummary()
         Exit Sub
     End If
 
-    Dim searchRange As Range, foundCell As Range
+    Dim searchRange As Range, foundCell As Range, deleteRows As Range
     Dim firstAddress As String
 
     ' Define the initial range to search in (first column, excluding the header row)
@@ -27,23 +27,25 @@ Sub FilterDataAndCreateSummary()
     ' Use Find to locate occurrences of "PARENT_NM" in the first column
     Set foundCell = searchRange.Find(What:="PARENT_NM", LookIn:=xlValues, LookAt:=xlWhole)
 
-    ' Loop through all matches and delete rows
+    ' Collect all rows to delete in a range
     If Not foundCell Is Nothing Then
         firstAddress = foundCell.Address ' Store the first match to avoid infinite loop
         Do
-            ' Delete the row
-            wsSpecial.Rows(foundCell.Row).Delete
-
-            ' Redefine the search range after deleting the row
-            Set searchRange = wsSpecial.Range(wsSpecial.Cells(2, 1), wsSpecial.Cells(wsSpecial.Rows.Count, 1))
-
+            ' Add the found row to the delete range
+            If deleteRows Is Nothing Then
+                Set deleteRows = foundCell.EntireRow
+            Else
+                Set deleteRows = Union(deleteRows, foundCell.EntireRow)
+            End If
+            
             ' Look for the next occurrence
-            Set foundCell = searchRange.Find(What:="PARENT_NM", After:=searchRange.Cells(1), LookIn:=xlValues, LookAt:=xlWhole)
-
-            ' Exit if no more matches are found
-            If foundCell Is Nothing Then Exit Do
-        Loop While foundCell.Address <> firstAddress
+            Set foundCell = searchRange.Find(What:="PARENT_NM", After:=foundCell, LookIn:=xlValues, LookAt:=xlWhole)
+        Loop While Not foundCell Is Nothing And foundCell.Address <> firstAddress
     End If
+
+    ' Delete all collected rows at once (faster and avoids range shifting issues)
+    If Not deleteRows Is Nothing Then deleteRows.Delete
+
 
 ' /*
 ' STEP 2: EXPORT DESIRED COLUMNS TO NEW WORKSHEET CALLED FilteredData
@@ -82,7 +84,7 @@ Sub FilterDataAndCreateSummary()
 
     ' Validate that WORK_UNIT_CD column exists
     If workUnitCol Is Nothing Then
-        MsgBox "Required column (WORK_UNIT_CD) not found!", vbExclamation
+        MsgBox "Required column `WORK_UNIT_CD` not found!", vbExclamation
         Exit Sub
     End If
 
@@ -119,7 +121,7 @@ Sub FilterDataAndCreateSummary()
     
     ' If wsSpecial is missing, just exit
     If wsOutersKey Is Nothing Then
-        MsgBox "`OUTERSKEY` worksheet is missing. Please add the OUTERSKEY worksheet.", vbInformation
+        MsgBox "`OUTERSKEY` worksheet is missing. Please add the `OUTERSKEY` worksheet.", vbInformation
         Exit Sub
     End If
 
@@ -145,11 +147,11 @@ Sub FilterDataAndCreateSummary()
 
     ' Validate columns exist
     If datasetCORPCol Is Nothing Or planTypeCol Is Nothing Then
-        MsgBox "Required columns (CORP_CD, PLAN_TYPE_CD) not found in the dataset!", vbExclamation
+        MsgBox "One or more of the required columns `CORP_CD`, `PLAN_TYPE_CD` not found in special!", vbExclamation
         Exit Sub
     End If
     If outerCORPCol Is Nothing Or outC5OuterCol Is Nothing Or outC4OuterCol Is Nothing Or outDLOuterCol Is Nothing Then
-        MsgBox "Required columns (CORP_CD, C5_OUTER, C4_OUTER, DL_OUTER) not found in OUTERSKEY!", vbExclamation
+        MsgBox "One or more of the required columns `CORP_CD`, `C5_OUTER`, `C4_OUTER`, `DL_OUTER` not found in OUTERSKEY!", vbExclamation
         Exit Sub
     End If
 
@@ -244,7 +246,7 @@ Sub FilterDataAndCreateSummary()
     
     ' If wsPreviousFilteredData is missing, just skip comparison
     If wsPreviousFilteredData Is Nothing Then
-        MsgBox "previous worksheet is missing. Skipping comparison.", vbInformation
+        MsgBox "`previous` worksheet is missing. Please rename `FilteredData` to `previous` and execute the formula again.", vbInformation
         Exit Sub
     End If
 
@@ -260,7 +262,7 @@ Sub FilterDataAndCreateSummary()
 
     ' Check if "WORK_UNIT_CD" columns are found
     If latestWorkOrderCol Is Nothing Or previousWorkOrderCol Is Nothing Then
-        MsgBox "WORK_UNIT_CD column not found!", vbExclamation
+        MsgBox "`WORK_UNIT_CD` column not found!", vbExclamation
         Exit Sub
     End If
 
@@ -299,7 +301,7 @@ Sub FilterDataAndCreateSummary()
     
     ' Validate the columns exist
     If workUnitCol Is Nothing Or insertCntCol Is Nothing Then
-        MsgBox "Required columns (WORK_UNIT_CD, INSERT_CNT) not found!", vbExclamation
+        MsgBox "One or more of the required columns `WORK_UNIT_CD`, `INSERT_CNT` not found!", vbExclamation
         Exit Sub
     End If
     
@@ -327,7 +329,7 @@ Sub FilterDataAndCreateSummary()
 
     ' Validate that REM_MC_CNT column exists
     If remCountCol Is Nothing Then
-        MsgBox "The REM_MC_CNT column was not found!", vbExclamation
+        MsgBox "`REM_MC_CNT` column was not found!", vbExclamation
         Exit Sub
     End If
 
@@ -360,7 +362,7 @@ Sub FilterDataAndCreateSummary()
     
     ' Validate the columns exist in wsFilteredData
     If outerCol Is Nothing Or stmtCNCol Is Nothing Or remMCCol Is Nothing Or planTypeCol Is Nothing Then
-        MsgBox "Required columns (OUTER, STMT_CNT, REM_MC_CNT, PLAN_TYPE_CD) not found!", vbExclamation
+        MsgBox "One or more of the required columns `OUTER`, `STMT_CNT`, `REM_MC_CNT`, `PLAN_TYPE_CD` not found!", vbExclamation
         Exit Sub
     End If
     
