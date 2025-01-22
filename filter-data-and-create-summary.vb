@@ -7,7 +7,16 @@ Sub FilterDataAndCreateSummary()
     Dim wsSpecial As Worksheet, wsFilteredData As Worksheet
 
     ' Set source worksheet
-    Set wsSpecial = ThisWorkbook.Sheets("Special") ' Update to your sheet name
+    On Error Resume Next
+    Set wsSpecial = ThisWorkbook.Sheets("special") ' Update to your sheet name
+    On Error GoTo 0
+    
+
+    ' If wsSpecial is missing, just exit
+    If wsSpecial Is Nothing Then
+        MsgBox "`special` worksheet is missing. Please rename your worksheet to `special`", vbInformation
+        Exit Sub
+    End If
 
     Dim searchRange As Range, foundCell As Range
     Dim firstAddress As String
@@ -103,8 +112,16 @@ Sub FilterDataAndCreateSummary()
     Dim sortedOuters(1 To 6) As Collection
     Dim entry As Variant
 
-    ' Set the dataset and OUTERSKEY worksheets
-    Set wsOutersKey = ThisWorkbook.Sheets("OUTERSKEY") ' Update to your OUTERSKEY sheet name
+    ' Set OUTERSKEY worksheet
+    On Error Resume Next
+    Set wsOutersKey = ThisWorkbook.Sheets("outerskey") ' Update to your OUTERSKEY sheet name
+    On Error GoTo 0
+    
+    ' If wsSpecial is missing, just exit
+    If wsOutersKey Is Nothing Then
+        MsgBox "`OUTERSKEY` worksheet is missing. Please add the OUTERSKEY worksheet.", vbInformation
+        Exit Sub
+    End If
 
     ' Find the relevant columns in the dataset
     Set datasetCORPCol = wsFilteredData.Rows(1).Find("CORP_CD")
@@ -225,7 +242,6 @@ Sub FilterDataAndCreateSummary()
     Set wsPreviousFilteredData = ThisWorkbook.Sheets("previous")
     On Error GoTo 0
     
-
     ' If wsPreviousFilteredData is missing, just skip comparison
     If wsPreviousFilteredData Is Nothing Then
         MsgBox "previous worksheet is missing. Skipping comparison.", vbInformation
