@@ -1,5 +1,19 @@
 Sub FilterDataAndCreateSummary()
 
+' Define constants
+Dim cYellow As Long
+Dim cPink As Long 
+Dim cRed As Long 
+Dim cOrange As Long
+Dim cBlue As Long 
+
+' Set constants
+cYellow = RGB(255, 255, 0)
+cPink = RGB(238, 143, 204)
+cRed = RGB(255, 111, 145)
+cOrange = RGB(255, 171, 96)
+cBlue = RGB(164, 249, 232)
+
 ' /*
 ' STEP 1: REMOVE DUPLICATE HEADING ROWS
 ' */
@@ -185,8 +199,8 @@ Sub FilterDataAndCreateSummary()
                     If planTypeValue = "V" Or planTypeValue = "F" Then
                         mappedOuter = entry(2) ' Use C4_OUTER
                         ' also highlight cells where PLAN_TYPE is V or F
-                        wsFilteredData.Cells(i, planTypeCol.Column).Interior.Color = RGB(238, 143, 204) ' pinky color
-                        wsFilteredData.Cells(i, outerCol.Column).Interior.Color = RGB(238, 143, 204) ' pinky color
+                        wsFilteredData.Cells(i, planTypeCol.Column).Interior.Color = cPink
+                        wsFilteredData.Cells(i, outerCol.Column).Interior.Color = cPink
                     ElseIf entry(1) <> "" Then
                         mappedOuter = entry(1) ' Use C5_OUTER
                     Else
@@ -284,7 +298,7 @@ Sub FilterDataAndCreateSummary()
 
         ' If the work order is not found, highlight the row in green
         If Not isFound Then
-            wsFilteredData.Cells(i + 1, datasetCORPCol.Column).Interior.Color = RGB(164, 249, 232) ' baby blue
+            wsFilteredData.Cells(i + 1, datasetCORPCol.Column).Interior.Color = cBlue
         End If
     Next i
 
@@ -311,10 +325,10 @@ Sub FilterDataAndCreateSummary()
         
         ' Check if INSERT_CNT is greater than 9
         If IsNumeric(insertCntValue) And insertCntValue > 4 Then
-            ' Highlight WORK_UNIT_CD with rgb(255,111,145)
-            wsFilteredData.Cells(i, workUnitCol.Column).Interior.Color = RGB(255, 111, 145)
-            ' Highlight INSERT_CNT with rgb(255,171,96)
-            wsFilteredData.Cells(i, insertCntCol.Column).Interior.Color = RGB(255, 171, 96)
+            ' Highlight WORK_UNIT_CD 
+            wsFilteredData.Cells(i, workUnitCol.Column).Interior.Color = cRed
+            ' Highlight INSERT_CNT
+            wsFilteredData.Cells(i, insertCntCol.Column).Interior.Color = cOrange
         End If
     Next i
 
@@ -337,12 +351,71 @@ Sub FilterDataAndCreateSummary()
     For i = 2 To lastRow ' Assuming headers are in row 1
         If wsFilteredData.Cells(i, remCountCol.Column).Value <> "" Then
             ' Highlight the row up to the last column
-            wsFilteredData.Range(wsFilteredData.Cells(i, 1), wsFilteredData.Cells(i, lastColumn)).Interior.Color = RGB(255, 255, 0) ' Yellow color
+            wsFilteredData.Range(wsFilteredData.Cells(i, 1), wsFilteredData.Cells(i, lastColumn)).Interior.Color = cYellow
         End If
     Next i
 
 ' /*
-' STEP 7: CALCULATE A SUMMARY
+' STEP 7: CREATE A COLOUR KEY ON FilteredData
+' */
+
+    Dim startRow As Long, endRow As Long
+    Dim keyDescriptions As Variant
+    Dim keyColors As Variant
+    Dim colorKeyRange As Range
+    
+    ' Find the first empty row below the data
+    startRow = wsFilteredData.Cells(wsFilteredData.Rows.Count, 1).End(xlUp).Row + 4 ' 4 rows below the last row of data (taking into account the Heading Row)
+
+    ' Calculate the heading row (directly above the color key)
+    headingRow = startRow - 1
+    
+    ' Add the heading text
+    With wsFilteredData.Range(wsFilteredData.Cells(headingRow, 1), wsFilteredData.Cells(headingRow, 3))
+        .Merge ' Merge across columns A to C
+        .Value = "Color Key" ' Set the heading text
+        .HorizontalAlignment = xlCenter ' Center-align the text
+        .VerticalAlignment = xlCenter
+        .Font.Bold = True ' Make the text bold
+        .Interior.Color = RGB(200, 200, 200) ' Optional: Light gray background color
+    End With
+    
+    ' Define the descriptions and their corresponding colors
+    keyDescriptions = Array("Remakes", _
+                            "C4 Outers", _
+                            "Work Orders with Inserts", _
+                            "Inserts", _
+                            "New Entries")
+    keyColors = Array(cYellow, cPink, cRed, cOrange, cBlue)
+    
+    ' Add the color key
+    For i = LBound(keyDescriptions) To UBound(keyDescriptions)
+        ' Write the description
+        wsFilteredData.Cells(startRow + i, 1).Value = keyDescriptions(i) ' Column A for descriptions
+        
+        ' Apply the background color to Column A
+        wsFilteredData.Cells(startRow + i, 1).Interior.Color = keyColors(i)
+
+        wsFilteredData.Range(wsFilteredData.Cells(startRow + i, 1), wsFilteredData.Cells(startRow + i, 3)).Merge
+    Next i
+
+    ' Find the first row of the color key
+    endRow = wsFilteredData.Cells(wsFilteredData.Rows.Count, 1).End(xlUp).Row
+    
+    ' Combine the heading row and color key range
+    Set colorKeyRange = wsFilteredData.Range(wsFilteredData.Cells(headingRow, 1), wsFilteredData.Cells(endRow, 3)) ' A to C, heading + color key
+    
+    ' Apply a thin black border to each row in the range
+    For i = headingRow To endRow
+        With wsFilteredData.Range(wsFilteredData.Cells(i, 1), wsFilteredData.Cells(i, 3)).Borders
+            .LineStyle = xlContinuous
+            .Weight = xlThin
+            .Color = RGB(0, 0, 0) ' Black border
+        End With
+    Next i
+
+' /*
+' STEP 8: CALCULATE A SUMMARY
 ' */
 
     Dim wsSummary As Worksheet
