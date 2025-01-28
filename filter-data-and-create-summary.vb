@@ -451,24 +451,26 @@ cBlue = RGB(164, 249, 232)
 ' STEP 8: CALCULATE A SUMMARY
 ' */
 
-    Dim wsSummary As Worksheet
     Dim stmtCNCol As Range, remMCCol As Range
+    Dim summaryStartRow As Long
     Dim outerValue As String, stmtValue As Double, remMCValue As Variant
-    Dim summaryRow As Long
+    Dim summaryData As Collection, key As Variant
     Dim idx As Long
     Dim outerArray() As Variant, stmtSumArray() As Double, stockArray() As Variant
     Dim stockLocation As String
     Dim foundOuter As Boolean
+    Dim summaryEndRow As Long
+    Dim mergedRange As Range
     
     ' Find the relevant columns
+    ' Set outerCol = wsFilteredData.Rows(1).Find("OUTER")
     Set stmtCNCol = wsFilteredData.Rows(1).Find("STMT_CNT")
     Set remMCCol = wsFilteredData.Rows(1).Find("REM_MC_CNT")
-    ' Set outerCol = wsFilteredData.Rows(1).Find("OUTER") 'declared elsewhere in code
-    ' Set planTypeCol = wsFilteredData.Rows(1).Find("PLAN_TYPE_CD") 'declared elsewhere in code
+    ' Set planTypeCol = wsFilteredData.Rows(1).Find("PLAN_TYPE_CD")
     
     ' Validate the columns exist in wsFilteredData
     If outerCol Is Nothing Or stmtCNCol Is Nothing Or remMCCol Is Nothing Or planTypeCol Is Nothing Then
-        MsgBox "One or more of the required columns `OUTER`, `STMT_CNT`, `REM_MC_CNT`, `PLAN_TYPE_CD` not found!", vbExclamation
+        MsgBox "Required columns (OUTER, STMT_CNT, REM_MC_CNT, PLAN_TYPE_CD) not found!", vbExclamation
         Exit Sub
     End If
     
@@ -511,10 +513,10 @@ cBlue = RGB(164, 249, 232)
                 ReDim Preserve outerArray(1 To UBound(outerArray) + 1)
                 ReDim Preserve stmtSumArray(1 To UBound(stmtSumArray) + 1)
                 ReDim Preserve stockArray(1 To UBound(stockArray) + 1)
-                
+
                 outerArray(UBound(outerArray)) = outerValue
                 stmtSumArray(UBound(stmtSumArray)) = stmtValue
-                
+
                 ' Map STOCK_LOCATION based on OUTER and PLAN_TYPE_CD
                 For idx = 2 To lastRowOutersKey
                     If planTypeValue = "V" Or planTypeValue = "F" Then
@@ -532,75 +534,75 @@ cBlue = RGB(164, 249, 232)
                         End If
                     End If
                 Next idx
-                
+
                 stockArray(UBound(stockArray)) = stockLocation
             End If
         End If
     Next i
 
-    ' Create a summary worksheet
-    On Error Resume Next
-    Set wsSummary = ThisWorkbook.Sheets("Summary")
-    If wsSummary Is Nothing Then
-        Set wsSummary = ThisWorkbook.Sheets.Add
-        wsSummary.Name = "Summary"
-    Else
-        wsSummary.Cells.Clear
-    End If
-    On Error GoTo 0
+    ' Determine the start of the summary
+    summaryStartRow = lastRowDataset + 20
 
-    ' Write the summary to the new worksheet
-    wsSummary.Cells(1, 1).Value = "OUTER"
-    wsSummary.Cells(1, 2).Value = "SUM"
-    wsSummary.Cells(1, 3).Value = "STOCK_LOCATION"
+    ' Write the summary data
+    wsFilteredData.Cells(summaryStartRow, 1).Value = "OUTER"
+    wsFilteredData.Cells(summaryStartRow, 3).Value = "SUM"
+    wsFilteredData.Cells(summaryStartRow, 4).Value = "STOCK_LOCATION"
 
-    summaryRow = 2
     For idx = 1 To UBound(outerArray)
-        wsSummary.Cells(summaryRow, 1).Value = outerArray(idx)
-        wsSummary.Cells(summaryRow, 2).Value = stmtSumArray(idx)
-        wsSummary.Cells(summaryRow, 3).Value = stockArray(idx)
-        summaryRow = summaryRow + 1
+        rowIdx = summaryStartRow + idx
+
+        wsFilteredData.Cells(rowIdx, 1).Value = outerArray(idx)
+
+        ' Write SUM
+        wsFilteredData.Cells(rowIdx, 3).Value = stmtSumArray(idx)
+
+        wsFilteredData.Cells(rowIdx, 4).Value = stockArray(idx)
     Next idx
 
-    ' Apply formatting to wsSummary
-    With wsSummary
-        Dim summaryLastCol As Long, summaryLastRow As Long
-        summaryLastCol = .Cells(1, .Columns.Count).End(xlToLeft).Column
-        summaryLastRow = .Cells(.Rows.Count, 1).End(xlUp).Row
+    ' Determine the end of the summary
+    summaryEndRow = summaryStartRow + UBound(outerArray)
 
-        ' Set headers bold and italic
-        .Range(.Cells(1, 1), .Cells(1, summaryLastCol)).Font.Bold = True
-        .Range(.Cells(1, 1), .Cells(1, summaryLastCol)).Font.Italic = True
-
-        ' Adjust column widths
-        .Columns.AutoFit
-
-        ' Make Columns A and B slightly wider
-        Columns("A").ColumnWidth = 15
-        Columns("B").ColumnWidth = 10
-
-        ' Left-align first and second columns
-        .Columns(1).HorizontalAlignment = xlLeft
-        .Columns(2).HorizontalAlignment = xlLeft
-
-        ' Apply borders to all data cells
-        With .Range(.Cells(1, 1), .Cells(summaryLastRow, summaryLastCol)).Borders
-            .LineStyle = xlContinuous
-            .Color = vbBlack
-            .Weight = xlThin
-        End With
-    End With
-    
-    ' Sort data by OUTER
-    wsSummary.Sort.SortFields.Clear
-    wsSummary.Sort.SortFields.Add key:=wsSummary.Columns(1), Order:=xlAscending
-
-    With wsSummary.Sort
-        .SetRange wsSummary.UsedRange
+    ' Sort the summary range
+    With wsFilteredData.Sort
+        .SortFields.Clear  ' Clear any previous sort fields
+        .SortFields.Add key:=wsFilteredData.Columns(1), Order:=xlAscending ' Sort by OUTER column (Column A)
+        
+        .SetRange wsFilteredData.Range(wsFilteredData.Cells(summaryStartRow, 1), wsFilteredData.Cells(summaryEndRow, 4))
         .Header = xlYes
         .MatchCase = False
         .Orientation = xlTopToBottom
         .Apply
     End With
+
+    ' Apply styling to the summary
+    summaryLastCol = 7 ' Column G
+    With wsFilteredData
+        ' Set headers bold and italic
+        .Range(.Cells(summaryStartRow, 1), .Cells(summaryStartRow, summaryLastCol)).Font.Bold = True
+        .Range(.Cells(summaryStartRow, 1), .Cells(summaryStartRow, summaryLastCol)).Font.Italic = True
+
+        .Range(.Cells(summaryStartRow, 1), .Cells(summaryEndRow, 1)).HorizontalAlignment = xlLeft
+
+        ' Apply borders to the summary range
+        With .Range(.Cells(summaryStartRow, 1), .Cells(summaryEndRow, summaryLastCol)).Borders
+            .LineStyle = xlContinuous
+            .Color = vbBlack
+            .Weight = xlThin
+        End With
+    End With
+
+    ' Merge summary heading columns
+    wsFilteredData.Range(wsFilteredData.Cells(summaryStartRow, 1), wsFilteredData.Cells(summaryStartRow, 2)).Merge
+    wsFilteredData.Range(wsFilteredData.Cells(summaryStartRow, 4), wsFilteredData.Cells(summaryStartRow, 7)).Merge
+
+     For idx = 1 To UBound(outerArray)
+        rowIdx = summaryStartRow + idx
+
+        ' Merge columns for OUTER
+        wsFilteredData.Range(wsFilteredData.Cells(rowIdx, 1), wsFilteredData.Cells(rowIdx, 2)).Merge
+
+        ' Merge and write STOCK_LOCATION
+        wsFilteredData.Range(wsFilteredData.Cells(rowIdx, 4), wsFilteredData.Cells(rowIdx, 7)).Merge
+    Next idx
     
 End Sub
