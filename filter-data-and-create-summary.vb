@@ -541,7 +541,7 @@ cBlue = RGB(164, 249, 232)
     Next i
 
     ' Determine the start of the summary
-    summaryStartRow = lastRowDataset + 20
+    summaryStartRow = lastRowDataset + 11
 
     ' Write the summary data
     wsFilteredData.Cells(summaryStartRow, 1).Value = "OUTER"
@@ -557,6 +557,11 @@ cBlue = RGB(164, 249, 232)
         wsFilteredData.Cells(rowIdx, 3).Value = stmtSumArray(idx)
 
         wsFilteredData.Cells(rowIdx, 4).Value = stockArray(idx)
+
+        ' Delete rows where SUM is zero
+        If stmtSumArray(idx) = 0 Then ' Check if SUM (Column B) is 0
+            wsFilteredData.Rows(rowIdx).Delete
+        End If
     Next idx
 
     ' Determine the end of the summary
