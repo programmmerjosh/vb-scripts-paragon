@@ -7,8 +7,13 @@ Sub DeleteFilteredRows()
     ' Set the worksheet
     Set ws = ThisWorkbook.Worksheets("special") ' Adjust the worksheet name
     
-    ' Clear filters if applied
-    If ws.AutoFilterMode Then ws.AutoFilterMode = False
+        ' Turn off filters to ensure proper deletion
+    If ws.AutoFilterMode Then
+        ws.AutoFilterMode = False
+    Else
+        MsgBox "No filters applied!", vbExclamation
+        Exit Sub
+    End If
     
     ' Define the range to search in (exclude the header row)
     Set searchRange = ws.Range("A2:A" & ws.Cells(ws.Rows.Count, "A").End(xlUp).Row)
