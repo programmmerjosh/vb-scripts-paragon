@@ -198,8 +198,12 @@ cBlue = RGB(164, 249, 232)
                 If Left(datasetCORPValue, Len(entry(0))) = entry(0) Then
                     If planTypeValue = "V" Or planTypeValue = "F" Then
                         mappedOuter = entry(2) ' Use C4_OUTER
-                        ' also highlight cells where PLAN_TYPE is V or F
-                        wsFilteredData.Cells(i, planTypeCol.Column).Interior.Color = cPink
+                        ' /*
+                        ' Side STEP: HIGHLIGHT C4 OUTERS
+                        ' */
+
+                        ' also highlight cells where PLAN_TYPE is V or F (and OUTER in the same row)
+                        ' wsFilteredData.Cells(i, planTypeCol.Column).Interior.Color = cPink
                         wsFilteredData.Cells(i, outerCol.Column).Interior.Color = cPink
                     ElseIf entry(1) <> "" Then
                         mappedOuter = entry(1) ' Use C5_OUTER
@@ -214,6 +218,32 @@ cBlue = RGB(164, 249, 232)
 
         ' Update the OUTER column
         wsFilteredData.Cells(i, outerCol.Column).Value = mappedOuter
+
+        ' /*
+        ' Side STEP: HIGHLIGHT OUTERS WE ALWAYS NEED TO ORDER (even when they have zero inserts)
+        ' */
+
+        Dim outersToOrder As Variant
+        Dim myOuter As String
+        Dim matchFound As Boolean
+        Dim count As Integer
+
+        ' Define the array of string values
+        outersToOrder = Array("50023", "BCY03", "BCORPC5AIR", "BARCLPC52", "GCRP5254TNT", "EOP39TNT", "BSMTNT")
+
+        ' Define the variable to compare
+        myOuter = wsFilteredData.Cells(i, outerCol.Column).Value
+        matchFound = False
+
+        ' Loop through the array and compare each value to myOuter
+        For count = LBound(outersToOrder) To UBound(outersToOrder)
+            If StrComp(outersToOrder(count), myOuter, vbTextCompare) = 0 Then
+                ' wsFilteredData.Cells(i, outerCol.Column).Interior.Color = cOrange
+                wsFilteredData.Cells(i, workUnitCol.Column).Interior.Color = cOrange
+                matchFound = True
+                Exit For ' Exit the loop since we found a match
+            End If
+        Next count
     Next i
 
     ' Apply formatting to wsFilteredData
@@ -240,7 +270,7 @@ cBlue = RGB(164, 249, 232)
         End With
     End With
     
-    ' /*
+' /*
 ' STEP 4: HIGHLIGHT NEW ENTRIES
 ' */
 
@@ -328,7 +358,7 @@ cBlue = RGB(164, 249, 232)
             ' Highlight WORK_UNIT_CD 
             wsFilteredData.Cells(i, workUnitCol.Column).Interior.Color = cRed
             ' Highlight INSERT_CNT
-            wsFilteredData.Cells(i, insertCntCol.Column).Interior.Color = cOrange
+            ' wsFilteredData.Cells(i, insertCntCol.Column).Interior.Color = cRed
         End If
     Next i
 
@@ -363,6 +393,9 @@ cBlue = RGB(164, 249, 232)
     Dim keyDescriptions As Variant
     Dim keyColors As Variant
     Dim colorKeyRange As Range
+    Dim numberOfColsToMerge As Long
+
+    numberOfColsToMerge = 6
     
     ' Find the first empty row below the data
     startRow = wsFilteredData.Cells(wsFilteredData.Rows.Count, 1).End(xlUp).Row + 4 ' 4 rows below the last row of data (taking into account the Heading Row)
@@ -371,7 +404,7 @@ cBlue = RGB(164, 249, 232)
     headingRow = startRow - 1
     
     ' Add the heading text
-    With wsFilteredData.Range(wsFilteredData.Cells(headingRow, 1), wsFilteredData.Cells(headingRow, 3))
+    With wsFilteredData.Range(wsFilteredData.Cells(headingRow, 1), wsFilteredData.Cells(headingRow, numberOfColsToMerge))
         .Merge ' Merge across columns A to C
         .Value = "Color Key" ' Set the heading text
         .HorizontalAlignment = xlCenter ' Center-align the text
@@ -383,8 +416,8 @@ cBlue = RGB(164, 249, 232)
     ' Define the descriptions and their corresponding colors
     keyDescriptions = Array("Remakes", _
                             "C4 Outers", _
-                            "Work Orders with Inserts", _
-                            "Inserts", _
+                            "Work Orders Of Jobs With Inserts", _
+                            "Work Orders Of Jobs With Outers We Should Order (0 Inserts)", _
                             "New Entries")
     keyColors = Array(cYellow, cPink, cRed, cOrange, cBlue)
     
@@ -396,18 +429,18 @@ cBlue = RGB(164, 249, 232)
         ' Apply the background color to Column A
         wsFilteredData.Cells(startRow + i, 1).Interior.Color = keyColors(i)
 
-        wsFilteredData.Range(wsFilteredData.Cells(startRow + i, 1), wsFilteredData.Cells(startRow + i, 3)).Merge
+        wsFilteredData.Range(wsFilteredData.Cells(startRow + i, 1), wsFilteredData.Cells(startRow + i, numberOfColsToMerge)).Merge
     Next i
 
     ' Find the first row of the color key
     endRow = wsFilteredData.Cells(wsFilteredData.Rows.Count, 1).End(xlUp).Row
     
     ' Combine the heading row and color key range
-    Set colorKeyRange = wsFilteredData.Range(wsFilteredData.Cells(headingRow, 1), wsFilteredData.Cells(endRow, 3)) ' A to C, heading + color key
+    Set colorKeyRange = wsFilteredData.Range(wsFilteredData.Cells(headingRow, 1), wsFilteredData.Cells(endRow, numberOfColsToMerge)) 
     
     ' Apply a thin black border to each row in the range
     For i = headingRow To endRow
-        With wsFilteredData.Range(wsFilteredData.Cells(i, 1), wsFilteredData.Cells(i, 3)).Borders
+        With wsFilteredData.Range(wsFilteredData.Cells(i, 1), wsFilteredData.Cells(i, numberOfColsToMerge)).Borders
             .LineStyle = xlContinuous
             .Weight = xlThin
             .Color = RGB(0, 0, 0) ' Black border
