@@ -14,55 +14,22 @@ cRed = RGB(255, 111, 145)
 cOrange = RGB(255, 171, 96)
 cBlue = RGB(164, 249, 232)
 
-' /*
-' STEP 1: REMOVE DUPLICATE HEADING ROWS
-' */
+Dim wsSpecial As Worksheet, wsFilteredData As Worksheet
 
-    Dim wsSpecial As Worksheet, wsFilteredData As Worksheet
+' Set source worksheet
+On Error Resume Next
+Set wsSpecial = ThisWorkbook.Sheets("special") ' Update to your sheet name
+On Error GoTo 0
 
-    ' Set source worksheet
-    On Error Resume Next
-    Set wsSpecial = ThisWorkbook.Sheets("special") ' Update to your sheet name
-    On Error GoTo 0
-    
 
-    ' If wsSpecial is missing, just exit
-    If wsSpecial Is Nothing Then
-        MsgBox "`special` worksheet is missing. Please rename your worksheet to `special`", vbInformation
-        Exit Sub
-    End If
-
-    Dim searchRange As Range, foundCell As Range, deleteRows As Range
-    Dim firstAddress As String
-
-    ' Define the initial range to search in (first column, excluding the header row)
-    Set searchRange = wsSpecial.Range(wsSpecial.Cells(2, 1), wsSpecial.Cells(wsSpecial.Rows.Count, 1))
-
-    ' Use Find to locate occurrences of "PARENT_NM" in the first column
-    Set foundCell = searchRange.Find(What:="PARENT_NM", LookIn:=xlValues, LookAt:=xlWhole)
-
-    ' Collect all rows to delete in a range
-    If Not foundCell Is Nothing Then
-        firstAddress = foundCell.Address ' Store the first match to avoid infinite loop
-        Do
-            ' Add the found row to the delete range
-            If deleteRows Is Nothing Then
-                Set deleteRows = foundCell.EntireRow
-            Else
-                Set deleteRows = Union(deleteRows, foundCell.EntireRow)
-            End If
-            
-            ' Look for the next occurrence
-            Set foundCell = searchRange.Find(What:="PARENT_NM", After:=foundCell, LookIn:=xlValues, LookAt:=xlWhole)
-        Loop While Not foundCell Is Nothing And foundCell.Address <> firstAddress
-    End If
-
-    ' Delete all collected rows at once (faster and avoids range shifting issues)
-    If Not deleteRows Is Nothing Then deleteRows.Delete
-
+' If wsSpecial is missing, just exit
+If wsSpecial Is Nothing Then
+    MsgBox "`special` worksheet is missing. Please rename your worksheet to `special`", vbInformation
+    Exit Sub
+End If
 
 ' /*
-' STEP 2: EXPORT DESIRED COLUMNS TO NEW WORKSHEET CALLED FilteredData
+' STEP 1: EXPORT DESIRED COLUMNS TO NEW WORKSHEET CALLED FilteredData
 ' */
 
     Dim colName As Variant
@@ -116,7 +83,7 @@ cBlue = RGB(164, 249, 232)
     End With
 
 ' /*
-' STEP 3: GET OUTERS BASED ON CORP_CD
+' STEP 2: GET OUTERS BASED ON CORP_CD
 ' */
 
     Dim wsOutersKey As Worksheet
@@ -271,7 +238,7 @@ cBlue = RGB(164, 249, 232)
     End With
     
 ' /*
-' STEP 4: HIGHLIGHT NEW ENTRIES
+' STEP 3: HIGHLIGHT NEW ENTRIES
 ' */
 
     Dim wsPreviousFilteredData As Worksheet
@@ -333,7 +300,7 @@ cBlue = RGB(164, 249, 232)
     Next i
 
 ' /*
-' STEP 5: HIGHLIGHT WORK ORDERS AND INSERTS WHERE INSERTS > 4
+' STEP 4: HIGHLIGHT WORK ORDERS AND INSERTS WHERE INSERTS > 4
 ' */
 
     Dim insertCntCol As Range
@@ -363,7 +330,7 @@ cBlue = RGB(164, 249, 232)
     Next i
 
 ' /*
-' STEP 6: HIGHLIGHT REMAKES
+' STEP 5: HIGHLIGHT REMAKES
 ' */
 
     Dim remCountCol As Range
@@ -386,7 +353,7 @@ cBlue = RGB(164, 249, 232)
     Next i
 
 ' /*
-' STEP 7: CREATE A COLOUR KEY ON FilteredData
+' STEP 6: CREATE A COLOUR KEY ON FilteredData
 ' */
 
     Dim startRow As Long, endRow As Long
@@ -448,7 +415,7 @@ cBlue = RGB(164, 249, 232)
     Next i
 
 ' /*
-' STEP 8: CALCULATE A SUMMARY
+' STEP 7: CALCULATE A SUMMARY
 ' */
 
     Dim stmtCNCol As Range, remMCCol As Range
