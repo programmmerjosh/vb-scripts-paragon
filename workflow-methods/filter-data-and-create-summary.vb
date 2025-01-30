@@ -290,7 +290,7 @@ cBlue = RGB(164, 249, 232)
     
     ' If wsPreviousFilteredData is missing, just skip comparison
     If wsPreviousFilteredData Is Nothing Then
-        MsgBox "`previous` worksheet is missing. Please rename `FilteredData` to `previous` and execute the formula again.", vbInformation
+        MsgBox "`previous` worksheet is missing. Please rename `FilteredData` to `previous` and execute FilterDataAndCreateSummary", vbInformation
         Exit Sub
     End If
 
