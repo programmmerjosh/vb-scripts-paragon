@@ -40,9 +40,19 @@ End If
     Dim lastRow As Long
     Dim targetCol As Long
 
-    ' Create a new worksheet for the filtered data
-    Set wsFilteredData = ThisWorkbook.Sheets.Add
-    wsFilteredData.Name = "FilteredData" ' Change as needed
+    ' Check if the sheet exists before proceeding
+    On Error Resume Next
+    Set wsFilteredData = ThisWorkbook.Sheets("FilteredData")
+    On Error GoTo 0 ' Reset error handling
+    If Not wsFilteredData Is Nothing Then
+        'Warn user that FilteredData already exists!
+        MsgBox "`FilteredData` already exists!! For this script to execute properly, either delete `FilteredData` or rename it to `previous`", vbExclamation
+        Exit Sub
+    Else
+        ' Create a new worksheet for the filtered data
+        Set wsFilteredData = ThisWorkbook.Sheets.Add
+        wsFilteredData.Name = "FilteredData" ' Change as needed
+    End If
 
     ' Define the columns to keep
     keepList = Array("PARENT_NM", "CORP_CD", "WORK_UNIT_CD", "STMT_CNT", "INSERT_CNT", "REM_MC_CNT", "PLAN_TYPE_CD") ' Desired column names
@@ -236,71 +246,9 @@ End If
             .Weight = xlThin
         End With
     End With
-    
-' /*
-' STEP 3: HIGHLIGHT NEW ENTRIES
-' */
-
-    Dim wsPreviousFilteredData As Worksheet
-    Dim latestWorkOrderCol As Range, previousWorkOrderCol As Range
-    Dim arrLatestWorkOrders As Variant, arrPreviousWorkOrders As Variant
-    Dim lastRowFiltered As Long, lastRowPrevious As Long
-    Dim lastColFiltered As Long, lastColPrevious As Long
-    Dim j As Long
-    Dim isFound As Boolean
-    Dim cell As Range
-
-    ' Set the target worksheets
-    On Error Resume Next
-    Set wsPreviousFilteredData = ThisWorkbook.Sheets("previous")
-    On Error GoTo 0
-    
-    ' If wsPreviousFilteredData is missing, just skip comparison
-    If wsPreviousFilteredData Is Nothing Then
-        MsgBox "`previous` worksheet is missing. Please rename `FilteredData` to `previous` and execute FilterDataAndCreateSummary", vbInformation
-        Exit Sub
-    End If
-
-    ' Find the last row and column in both worksheets
-    lastRowFiltered = wsFilteredData.Cells(wsFilteredData.Rows.Count, "A").End(xlUp).Row
-    lastRowPrevious = wsPreviousFilteredData.Cells(wsPreviousFilteredData.Rows.Count, "A").End(xlUp).Row
-    lastColFiltered = wsFilteredData.Cells(1, wsFilteredData.Columns.Count).End(xlToLeft).Column
-    lastColPrevious = wsPreviousFilteredData.Cells(1, wsPreviousFilteredData.Columns.Count).End(xlToLeft).Column
-
-    ' Identify the "WORK_UNIT_CD" column in both sheets (assuming column name is in the header)
-    Set latestWorkOrderCol = wsFilteredData.Rows(1).Find("WORK_UNIT_CD", LookIn:=xlValues, LookAt:=xlWhole)
-    Set previousWorkOrderCol = wsPreviousFilteredData.Rows(1).Find("WORK_UNIT_CD", LookIn:=xlValues, LookAt:=xlWhole)
-
-    ' Check if "WORK_UNIT_CD" columns are found
-    If latestWorkOrderCol Is Nothing Or previousWorkOrderCol Is Nothing Then
-        MsgBox "`WORK_UNIT_CD` column not found!", vbExclamation
-        Exit Sub
-    End If
-
-    ' Load WORK_UNIT_CD values into arrays
-    arrLatestWorkOrders = wsFilteredData.Range(wsFilteredData.Cells(2, latestWorkOrderCol.Column), wsFilteredData.Cells(lastRowFiltered, latestWorkOrderCol.Column)).Value
-    arrPreviousWorkOrders = wsPreviousFilteredData.Range(wsPreviousFilteredData.Cells(2, previousWorkOrderCol.Column), wsPreviousFilteredData.Cells(lastRowPrevious, previousWorkOrderCol.Column)).Value
-
-    ' Compare the arrays and highlight rows where WORK_UNIT_CD in arrLatestWorkOrders is not found in arrPreviousWorkOrders
-    For i = 1 To UBound(arrLatestWorkOrders, 1)
-        isFound = False
-
-        ' Compare each work order in arrLatestWorkOrders with arrPreviousWorkOrders
-        For j = 1 To UBound(arrPreviousWorkOrders, 1)
-            If arrLatestWorkOrders(i, 1) = arrPreviousWorkOrders(j, 1) Then
-                isFound = True
-                Exit For
-            End If
-        Next j
-
-        ' If the work order is not found, highlight the row in green
-        If Not isFound Then
-            wsFilteredData.Cells(i + 1, datasetCORPCol.Column).Interior.Color = cBlue
-        End If
-    Next i
 
 ' /*
-' STEP 4: HIGHLIGHT WORK ORDERS AND INSERTS WHERE INSERTS > 4
+' STEP 3: HIGHLIGHT WORK ORDERS AND INSERTS WHERE INSERTS > 4
 ' */
 
     Dim insertCntCol As Range
@@ -330,7 +278,7 @@ End If
     Next i
 
 ' /*
-' STEP 5: HIGHLIGHT REMAKES
+' STEP 4: HIGHLIGHT REMAKES
 ' */
 
     Dim remCountCol As Range
@@ -353,7 +301,7 @@ End If
     Next i
 
 ' /*
-' STEP 6: CREATE A COLOUR KEY ON FilteredData
+' STEP 5: CREATE A COLOUR KEY ON FilteredData
 ' */
 
     Dim startRow As Long, endRow As Long
@@ -415,7 +363,7 @@ End If
     Next i
 
 ' /*
-' STEP 7: CALCULATE A SUMMARY
+' STEP 6: CALCULATE A SUMMARY
 ' */
 
     Dim stmtCNCol As Range, remMCCol As Range
@@ -576,5 +524,88 @@ End If
         ' Merge and write STOCK_LOCATION
         wsFilteredData.Range(wsFilteredData.Cells(rowIdx, 4), wsFilteredData.Cells(rowIdx, 7)).Merge
     Next idx
+
+' /*
+' STEP 7: DELETE `special` WORKSHEET AS WE WILL NO LONGER BE NEEDING IT.
+' */
+    On Error Resume Next
+    Application.DisplayAlerts = False
+    ThisWorkbook.Sheets("special").Delete
+    Application.DisplayAlerts = True
+    On Error GoTo 0
+
+' /*
+' STEP 8: HIGHLIGHT NEW ENTRIES (which will only execute if the 'previous' worksheet exists) 
+' */
+
+    Dim wsPreviousFilteredData As Worksheet
+    Dim latestWorkOrderCol As Range, previousWorkOrderCol As Range
+    Dim arrLatestWorkOrders As Variant, arrPreviousWorkOrders As Variant
+    Dim lastRowFiltered As Long, lastRowPrevious As Long
+    Dim lastColFiltered As Long, lastColPrevious As Long
+    Dim j As Long
+    Dim isFound As Boolean
+    Dim cell As Range
+
+    ' Set the target worksheets
+    On Error Resume Next
+    Set wsPreviousFilteredData = ThisWorkbook.Sheets("previous")
+    On Error GoTo 0
+    
+    ' If wsPreviousFilteredData is missing, just skip comparison
+    If wsPreviousFilteredData Is Nothing Then
+        MsgBox "The script has run successfully!!", vbInformation
+        MsgBox "Important Note: `previous` worksheet is missing. Rename `FilteredData` to `previous` before you run this script again to see the new entries.", vbInformation
+        Exit Sub
+    End If
+
+    ' Find the last row and column in both worksheets
+    lastRowFiltered = wsFilteredData.Cells(wsFilteredData.Rows.Count, "A").End(xlUp).Row
+    lastRowPrevious = wsPreviousFilteredData.Cells(wsPreviousFilteredData.Rows.Count, "A").End(xlUp).Row
+    lastColFiltered = wsFilteredData.Cells(1, wsFilteredData.Columns.Count).End(xlToLeft).Column
+    lastColPrevious = wsPreviousFilteredData.Cells(1, wsPreviousFilteredData.Columns.Count).End(xlToLeft).Column
+
+    ' Identify the "WORK_UNIT_CD" column in both sheets (assuming column name is in the header)
+    Set latestWorkOrderCol = wsFilteredData.Rows(1).Find("WORK_UNIT_CD", LookIn:=xlValues, LookAt:=xlWhole)
+    Set previousWorkOrderCol = wsPreviousFilteredData.Rows(1).Find("WORK_UNIT_CD", LookIn:=xlValues, LookAt:=xlWhole)
+
+    ' Check if "WORK_UNIT_CD" columns are found
+    If latestWorkOrderCol Is Nothing Or previousWorkOrderCol Is Nothing Then
+        MsgBox "`WORK_UNIT_CD` column not found!", vbExclamation
+        Exit Sub
+    End If
+
+    ' Load WORK_UNIT_CD values into arrays
+    arrLatestWorkOrders = wsFilteredData.Range(wsFilteredData.Cells(2, latestWorkOrderCol.Column), wsFilteredData.Cells(lastRowFiltered, latestWorkOrderCol.Column)).Value
+    arrPreviousWorkOrders = wsPreviousFilteredData.Range(wsPreviousFilteredData.Cells(2, previousWorkOrderCol.Column), wsPreviousFilteredData.Cells(lastRowPrevious, previousWorkOrderCol.Column)).Value
+
+    ' Compare the arrays and highlight rows where WORK_UNIT_CD in arrLatestWorkOrders is not found in arrPreviousWorkOrders
+    For i = 1 To UBound(arrLatestWorkOrders, 1)
+        isFound = False
+
+        ' Compare each work order in arrLatestWorkOrders with arrPreviousWorkOrders
+        For j = 1 To UBound(arrPreviousWorkOrders, 1)
+            If arrLatestWorkOrders(i, 1) = arrPreviousWorkOrders(j, 1) Then
+                isFound = True
+                Exit For
+            End If
+        Next j
+
+        ' If the work order is not found, highlight the row in green
+        If Not isFound Then
+            wsFilteredData.Cells(i + 1, datasetCORPCol.Column).Interior.Color = cBlue
+        End If
+    Next i
+
+' /*
+' STEP 8: DELETE `previous` WORKSHEET AS WE WILL NO LONGER BE NEEDING IT.
+' */
+    On Error Resume Next
+    Application.DisplayAlerts = False
+    ThisWorkbook.Sheets("previous").Delete
+    Application.DisplayAlerts = True
+    On Error GoTo 0
+
+    MsgBox "The script has run successfully!!", vbInformation
     
 End Sub
