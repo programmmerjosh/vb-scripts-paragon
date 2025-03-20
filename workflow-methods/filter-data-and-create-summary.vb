@@ -598,7 +598,14 @@ End If
     Next i
 
 ' /*
-' STEP 8: DELETE `previous` WORKSHEET AS WE WILL NO LONGER BE NEEDING IT.
+' STEP 9: Proposed new step: Find a list of "enclosed" work orders
+        ' NOTE: these will not be definate because if a work order is missing from our new-list, it COULD mean 
+        ' that the work order has been pushed to the following day's list to be enclosed 
+        ' unless we have already included tomorrow's list in our calculation, then it's almost certainly been enclosed.
+' */
+
+' /*
+' STEP 10: DELETE `previous` WORKSHEET AS WE WILL NO LONGER BE NEEDING IT.
 ' */
     On Error Resume Next
     Application.DisplayAlerts = False
