@@ -598,11 +598,67 @@ End If
     Next i
 
 ' /*
-' STEP 9: Proposed new step: Find a list of "enclosed" work orders
+        ' NOTE: This code is untested. So, if it breaks something, we can just remove/comment-out step 9
+' STEP 9: CREATE A LIST OF "ENCLOSED" WORK ORDERS
         ' NOTE: these will not be definate because if a work order is missing from our new-list, it COULD mean 
         ' that the work order has been pushed to the following day's list to be enclosed 
         ' unless we have already included tomorrow's list in our calculation, then it's almost certainly been enclosed.
 ' */
+    ' Declare array to store enclosed work orders
+    Dim arrEnclosedWorkOrders As Variant
+    Dim enclosedCount As Long
+
+    ' Initialize an array with a size equal to arrPreviousWorkOrders (worst case scenario)
+    ReDim arrEnclosedWorkOrders(1 To UBound(arrPreviousWorkOrders, 1), 1 To 1)
+
+    enclosedCount = 0
+
+    ' Loop through arrPreviousWorkOrders to find missing values in arrLatestWorkOrders
+    For j = 1 To UBound(arrPreviousWorkOrders, 1)
+        isFound = False
+
+        ' Compare each work order in arrPreviousWorkOrders with arrLatestWorkOrders
+        For i = 1 To UBound(arrLatestWorkOrders, 1)
+            If arrPreviousWorkOrders(j, 1) = arrLatestWorkOrders(i, 1) Then
+                isFound = True
+                Exit For
+            End If
+        Next i
+
+        ' If the work order is not found, add it to arrEnclosedWorkOrders
+        If Not isFound Then
+            enclosedCount = enclosedCount + 1
+            arrEnclosedWorkOrders(enclosedCount, 1) = arrPreviousWorkOrders(j, 1)
+        End If
+    Next j
+
+    ' Resize arrEnclosedWorkOrders to the actual number of missing values
+    If enclosedCount > 0 Then
+        ReDim Preserve arrEnclosedWorkOrders(1 To enclosedCount, 1 To 1)
+    Else
+        arrEnclosedWorkOrders = Empty ' If no enclosed work orders, clear the array
+    End If
+
+    ' Determine where to place the ENCLOSED W/O section
+    Dim enclosedStartRow As Long
+    enclosedStartRow = summaryEndRow + 2 ' Leave a blank row after summary
+
+    ' Write the ENCLOSED W/O header
+    wsFilteredData.Cells(enclosedStartRow, 1).Value = "ENCLOSED W/O"
+    wsFilteredData.Cells(enclosedStartRow, 1).Font.Bold = True
+    wsFilteredData.Cells(enclosedStartRow, 1).Font.Italic = True
+
+    ' Populate enclosed work orders below the header
+    For idx = 1 To UBound(arrEnclosedWorkOrders, 1)
+        wsFilteredData.Cells(enclosedStartRow + idx, 1).Value = arrEnclosedWorkOrders(idx, 1)
+    Next idx
+
+    ' Apply border styling to ENCLOSED W/O section
+    With wsFilteredData.Range(wsFilteredData.Cells(enclosedStartRow, 1), wsFilteredData.Cells(enclosedStartRow + UBound(arrEnclosedWorkOrders, 1), 1)).Borders
+        .LineStyle = xlContinuous
+        .Color = vbBlack
+        .Weight = xlThin
+    End With
 
 ' /*
 ' STEP 10: DELETE `previous` WORKSHEET AS WE WILL NO LONGER BE NEEDING IT.
