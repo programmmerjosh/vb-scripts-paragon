@@ -14,7 +14,8 @@ These scripts serve the purpose of calculating and identifying what stock to ord
 5. Highlights *REMAKES* (yellow)
 6. Calculates a summary
 7. Uses the *previous* worksheet to compare with FilteredData to find new entries (if *previous* exists)
-8. Deletes the *special* and *previous* worksheets
+8. Compares FilteredData (new-list) with *previous* to create an enclosed work order list
+9. Deletes the *special* and *previous* worksheets
 
 ### How To Execute The Scripts And What You Need Before You Do:
 To execute both script(s), follow these instructions:
