@@ -58,47 +58,29 @@ End If
     keepList = Array("PARENT_NM", "CORP_CD", "WORK_UNIT_CD", "STMT_CNT", "INSERT_CNT", "REM_MC_CNT", "PLAN_TYPE_CD") ' Desired column names
     Set headers = wsSpecial.Rows(1) ' Assuming headers are in row 1
 
-    ' Copy the header row first
-    wsSpecial.Rows(1).Copy Destination:=wsFilteredData.Rows(1)
-
-    '  wsFilteredData.Columns(3).NumberFormat = "@" ' Set the column to text format
-
-    ' Copy the keepList columns to the new worksheet, with special handling for WORK_UNIT_CD
+    ' Copy the keepList columns to the new worksheet
     targetCol = 1
     For Each colName In keepList
         For i = 1 To headers.Columns.Count
             If wsSpecial.Cells(1, i).Value = colName Then
-                If colName = "WORK_UNIT_CD" Then
-                    ' Special case for WORK_UNIT_CD, copy the column into an array up to the last row of data
-                    lastRow = wsSpecial.Cells(wsSpecial.Rows.Count, i).End(xlUp).Row ' Get last row with data
-                    Dim colData As Variant
-                    colData = wsSpecial.Range(wsSpecial.Cells(2, i), wsSpecial.Cells(lastRow, i)).Value ' Get data from row 2 to last data row
-
-                    ' Prepend apostrophe to each cell in the array
-                    Dim m As Long
-                    For m = 1 To UBound(colData, 1) ' Loop through the data rows
-                        colData(m, 1) = "'" & colData(m, 1) ' Prepend apostrophe
-                    Next m
-
-                    ' Paste the modified data into wsFilteredData (skip header)
-                    wsFilteredData.Cells(2, targetCol).Resize(UBound(colData, 1), 1).Value = colData
-                Else
-                    ' Otherwise, just copy the column normally
-                    wsSpecial.Columns(i).Copy Destination:=wsFilteredData.Cells(1, targetCol)
-                End If
+                wsSpecial.Columns(i).Copy Destination:=wsFilteredData.Cells(1, targetCol)
                 targetCol = targetCol + 1
                 Exit For
             End If
         Next i
     Next colName
 
-    ' After copying, ensure the WORK_UNIT_CD column in wsFilteredData is in text format
+    ' Set reference for WORK_UNIT_CD column
     Set workUnitCol = wsFilteredData.Rows(1).Find("WORK_UNIT_CD")
-    If Not workUnitCol Is Nothing Then
-        wsFilteredData.Columns(workUnitCol.Column).NumberFormat = "@"
+
+    ' Validate that WORK_UNIT_CD column exists
+    If workUnitCol Is Nothing Then
+        MsgBox "Required column `WORK_UNIT_CD` not found!", vbExclamation
+        Exit Sub
     End If
 
     ' Sort data by WORK_UNIT_CD
+    lastRow = wsFilteredData.Cells(wsFilteredData.Rows.Count, workUnitCol.Column).End(xlUp).Row
     wsFilteredData.Sort.SortFields.Clear
     wsFilteredData.Sort.SortFields.Add key:=wsFilteredData.Columns(workUnitCol.Column), Order:=xlAscending ' Sort by WORK_UNIT_CD
 
@@ -109,10 +91,6 @@ End If
         .Orientation = xlTopToBottom
         .Apply
     End With
-
-    ' After sorting, ensure the WORK_UNIT_CD column is set to text format
-    wsFilteredData.Columns(workUnitCol.Column).NumberFormat = "@"
-    wsFilteredData.Columns(workUnitCol.Column).HorizontalAlignment = xlRight
 
 ' /*
 ' STEP 2: GET OUTERS BASED ON CORP_CD
