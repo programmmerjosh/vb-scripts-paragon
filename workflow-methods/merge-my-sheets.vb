@@ -52,11 +52,37 @@ Sub MergeMySheets()
                         ' If only header exists, skip this sheet
                     End If
                 End If
+                
                 If Not srcRng Is Nothing Then
-                    ' Paste values into target sheet
+                    ' Before pasting, force the WORK_UNIT_CD column to text format in wsTarget
+                    Dim colNum As Long
+                    colNum = Application.Match("WORK_UNIT_CD", wsSource.Rows(1), 0) ' Find the WORK_UNIT_CD column
+                    If Not IsError(colNum) Then
+                        ' Convert the WORK_UNIT_CD column to text in the target sheet
+                        wsTarget.Columns(colNum).NumberFormat = "@"
+                    End If
+                    
+                    ' Copy data from source to target
                     With srcRng
+                        ' Paste values into target sheet
                         wsTarget.Cells(targetRow, 1).Resize(.Rows.Count, .Columns.Count).Value = .Value
                     End With
+
+                    ' After copying, force the WORK_UNIT_CD column to text format again (in case it got changed)
+                    If Not IsError(colNum) Then
+                        wsTarget.Columns(colNum).NumberFormat = "@"
+                        ' Loop through the WORK_UNIT_CD column and prepend apostrophe if numeric
+                        Dim colData As Variant
+                        colData = wsTarget.Range(wsTarget.Cells(targetRow + 1, colNum), wsTarget.Cells(targetRow + srcRng.Rows.Count, colNum)).Value
+                        Dim j As Long
+                        For j = 1 To UBound(colData, 1)
+                            If IsNumeric(colData(j, 1)) Then
+                                colData(j, 1) = "'" & colData(j, 1) ' Prepend apostrophe
+                            End If
+                        Next j
+                        ' Paste the modified data back into the target sheet
+                        wsTarget.Range(wsTarget.Cells(targetRow + 1, colNum), wsTarget.Cells(targetRow + srcRng.Rows.Count, colNum)).Value = colData
+                    End If
                 End If
                 ' Update next target row
                 targetRow = wsTarget.Cells(wsTarget.Rows.Count, 1).End(xlUp).Row + 1
@@ -67,8 +93,6 @@ Sub MergeMySheets()
         Set wsSource = Nothing
         Set srcRng = Nothing
     Next i
-    
-    ' MsgBox "Data merged successfully! Now running the primary script.", vbInformation
     
     ' Call the primary script on the merged data
     Call FilterDataAndCreateSummary
