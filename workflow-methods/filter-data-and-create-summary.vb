@@ -543,6 +543,21 @@ End If
     On Error GoTo 0
 
 ' /*
+' SIDE (non-essential) STEP: ADD DATE AND TIME to the right header (for printing purposes).
+' */
+
+    Dim currentDate As String
+    Dim formattedDate As String
+
+    ' Get the current date and time in the desired format
+    formattedDate = Format(Now, "HH:mm - DD/MM/YYYY")
+    
+    ' Add the formatted date and time to the header
+    With wsFilteredData.PageSetup
+        .RightHeader = formattedDate
+    End With
+
+' /*
 ' STEP 7: HIGHLIGHT NEW ENTRIES (which will only execute if the 'previous' worksheet exists) 
 ' */
 
@@ -645,7 +660,7 @@ If missingCount > 0 Then
     missingStartRow = summaryEndRow + 2
 
     ' Write the header for the missing values
-    wsFilteredData.Cells(missingStartRow, 1).Value = "MISSING WORK_UNIT_CD"
+    wsFilteredData.Cells(missingStartRow, 1).Value = "ENCLOSED WORK_UNIT_CDs"
     
     ' Write the missing values below the header
     For index = 1 To missingCount
@@ -662,7 +677,6 @@ If missingCount > 0 Then
     End With
 End If
 
-
 ' /*
 ' SIDE (non-essential) STEP: DELETE `previous` WORKSHEET AS WE WILL NO LONGER BE NEEDING IT.
 ' */
@@ -671,7 +685,7 @@ End If
     ThisWorkbook.Sheets("previous").Delete
     Application.DisplayAlerts = True
     On Error GoTo 0
-
-    MsgBox "The script has run successfully!!", vbInformation
     
+    MsgBox "The script has run successfully!!", vbInformation
+
 End Sub
