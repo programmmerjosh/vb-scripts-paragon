@@ -376,7 +376,7 @@ End If
     Dim outerValue As String, stmtValue As Double, remMCValue As Variant
     Dim summaryData As Collection, key As Variant
     Dim idx As Long
-    Dim outerArray() As Variant, stmtSumArray() As Double, stockArray() As Variant
+    Dim outerArray() As Variant, stmtSumArray() As Double, stockArray() As Variant 
     Dim stockLocation As String
     Dim foundOuter As Boolean
     Dim summaryEndRow As Long
@@ -400,7 +400,7 @@ End If
     
     ' Initialize arrays for OUTER values, SUM values, and STOCK_LOCATION
     ReDim outerArray(1 To 1)
-    ReDim stmtSumArray(1 To 1)
+    ReDim stmtSumArray(1 To 1) 
     ReDim stockArray(1 To 1)
     
     ' Loop through each row in wsFilteredData to calculate sums and map STOCK_LOCATION
@@ -606,70 +606,7 @@ End If
     Next i
 
 ' /*
-        ' NOTE: This code is untested. So, if it breaks something, we can just remove/comment-out step 9
-' STEP 9: CREATE A LIST OF "ENCLOSED" WORK ORDERS
-        ' NOTE: these will not be definate because if a work order is missing from our new-list, it COULD mean 
-        ' that the work order has been pushed to the following day's list to be enclosed 
-        ' unless we have already included tomorrow's list in our calculation, then it's almost certainly been enclosed.
-' */
-    ' Declare array to store enclosed work orders
-    ' ""Dim arrEnclosedWorkOrders As Variant
-    ' Dim enclosedCount As Long
-
-    ' ' Initialize an array with a size equal to arrPreviousWorkOrders (worst case scenario)
-    ' ReDim arrEnclosedWorkOrders(1 To UBound(arrPreviousWorkOrders, 1), 1 To 1)
-
-    ' enclosedCount = 0
-
-    ' ' Loop through arrPreviousWorkOrders to find missing values in arrLatestWorkOrders
-    ' For j = 1 To UBound(arrPreviousWorkOrders, 1)
-    '     isFound = False
-
-    '     ' Compare each work order in arrPreviousWorkOrders with arrLatestWorkOrders
-    '     For i = 1 To UBound(arrLatestWorkOrders, 1)
-    '         If arrPreviousWorkOrders(j, 1) = arrLatestWorkOrders(i, 1) Then
-    '             isFound = True
-    '             Exit For
-    '         End If
-    '     Next i
-
-    '     ' If the work order is not found, add it to arrEnclosedWorkOrders
-    '     If Not isFound Then
-    '         enclosedCount = enclosedCount + 1
-    '         arrEnclosedWorkOrders(enclosedCount, 1) = arrPreviousWorkOrders(j, 1)
-    '     End If
-    ' Next j
-
-    ' ' Resize arrEnclosedWorkOrders to the actual number of missing values
-    ' If enclosedCount > 0 Then
-    '     ReDim Preserve arrEnclosedWorkOrders(1 To enclosedCount, 1 To 1)
-    ' Else
-    '     arrEnclosedWorkOrders = Empty ' If no enclosed work orders, clear the array
-    ' End If
-
-    ' ' Determine where to place the ENCLOSED W/O section
-    ' Dim enclosedStartRow As Long
-    ' enclosedStartRow = summaryEndRow + 2 ' Leave a blank row after summary
-
-    ' ' Write the ENCLOSED W/O header
-    ' wsFilteredData.Cells(enclosedStartRow, 1).Value = "ENCLOSED W/O"
-    ' wsFilteredData.Cells(enclosedStartRow, 1).Font.Bold = True
-    ' wsFilteredData.Cells(enclosedStartRow, 1).Font.Italic = True
-
-    ' ' Populate enclosed work orders below the header
-    ' For idx = 1 To UBound(arrEnclosedWorkOrders, 1)
-    '     wsFilteredData.Cells(enclosedStartRow + idx, 1).Value = arrEnclosedWorkOrders(idx, 1)
-    ' Next idx
-
-    ' ' Apply border styling to ENCLOSED W/O section
-    ' With wsFilteredData.Range(wsFilteredData.Cells(enclosedStartRow, 1), wsFilteredData.Cells(enclosedStartRow + UBound(arrEnclosedWorkOrders, 1), 1)).Borders
-    '     .LineStyle = xlContinuous
-    '     .Color = vbBlack
-    '     .Weight = xlThin
-    ' End With""
-
-' /*
-' STEP 10: DELETE `previous` WORKSHEET AS WE WILL NO LONGER BE NEEDING IT.
+' STEP 9: DELETE `previous` WORKSHEET AS WE WILL NO LONGER BE NEEDING IT.
 ' */
     On Error Resume Next
     Application.DisplayAlerts = False
@@ -678,83 +615,5 @@ End If
     On Error GoTo 0
 
     MsgBox "The script has run successfully!!", vbInformation
-    
-End Sub
-
-
-Sub MergeMySheets()
-    Dim wsSource As Worksheet, wsTarget As Worksheet
-    Dim lastRow As Long, targetRow As Long
-    Dim wb As Workbook, ColCnt As Long
-    Dim sheetNames As Variant, srcRng As Range
-    Dim i As Integer
-    
-    ' Define the sheet names to copy from
-    sheetNames = Array("s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8") ' Update as needed
-    
-    ' Create a new worksheet for the filtered data
-    Set wb = ThisWorkbook
-    
-    ' Check if the sheet exists before proceeding
-    On Error Resume Next
-    Set wsTarget = wb.Sheets("special")
-    On Error GoTo 0 ' Reset error handling
-    If Not wsTarget Is Nothing Then
-        ' Clear existing data in target sheet
-        wsTarget.Cells.Clear
-    Else
-        Set wsTarget = wb.Sheets.Add
-        wsTarget.Name = "special" ' Change as needed
-    End If
-    
-    targetRow = 1 ' Start pasting from the first row
-    Dim firstSheet As Boolean: firstSheet = True ' Flag to track the first sheet
-    
-    ' Loop through the defined sheet names
-    For i = LBound(sheetNames) To UBound(sheetNames)
-        ' Check if the sheet exists before proceeding
-        On Error Resume Next
-        Set wsSource = wb.Sheets(sheetNames(i))
-        On Error GoTo 0 ' Reset error handling
-        
-        ' If the sheet does not exist, skip it
-        If Not wsSource Is Nothing Then
-            ' Find last used row in source sheet
-            lastRow = wsSource.Cells(wsSource.Rows.Count, 1).End(xlUp).Row
-            ColCnt = wsSource.UsedRange.Columns.Count
-            ' Only copy if the sheet contains data
-            If lastRow > 0 Then
-                If firstSheet Then
-                    ' First sheet: Copy everything (including headers)
-                    Set srcRng = wsSource.Range("A1", wsSource.Cells(lastRow, ColCnt))
-                    firstSheet = False ' Mark that we've processed the first sheet
-                Else
-                    ' Other sheets: Exclude the header (start from row 2)
-                    If lastRow > 1 Then
-                        Set srcRng = wsSource.Range("A2", wsSource.Cells(lastRow, ColCnt))
-                    Else
-                        ' If only header exists, skip this sheet
-                    End If
-                End If
-                If Not srcRng Is Nothing Then
-                    ' Paste values into target sheet
-                    With srcRng
-                        wsTarget.Cells(targetRow, 1).Resize(.Rows.Count, .Columns.Count).Value = .Value
-                    End With
-                End If
-                ' Update next target row
-                targetRow = wsTarget.Cells(wsTarget.Rows.Count, 1).End(xlUp).Row + 1
-            End If
-        End If
-        
-        ' Reset wsSource for the next loop
-        Set wsSource = Nothing
-        Set srcRng = Nothing
-    Next i
-    
-    ' MsgBox "Data merged successfully! Now running the primary script.", vbInformation
-    
-    ' Call the primary script on the merged data
-    Call FilterDataAndCreateSummary
     
 End Sub
