@@ -649,7 +649,7 @@ If missingCount > 0 Then
     
     ' Write the missing values below the header
     For index = 1 To missingCount
-        wsFilteredData.Cells(missingStartRow + index, 1).Value = missingValues(index)
+        wsFilteredData.Cells(missingStartRow + index, 1).Value = "'" & missingValues(index)
     Next index
 
     ' Apply formatting to the missing values section
