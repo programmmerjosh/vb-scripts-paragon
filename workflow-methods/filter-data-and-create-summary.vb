@@ -534,7 +534,7 @@ End If
     Next idx
 
 ' /*
-' STEP 7: DELETE `special` WORKSHEET AS WE WILL NO LONGER BE NEEDING IT.
+' SIDE (non-essential) STEP: DELETE `special` WORKSHEET AS WE WILL NO LONGER BE NEEDING IT.
 ' */
     On Error Resume Next
     Application.DisplayAlerts = False
@@ -543,7 +543,7 @@ End If
     On Error GoTo 0
 
 ' /*
-' STEP 8: HIGHLIGHT NEW ENTRIES (which will only execute if the 'previous' worksheet exists) 
+' STEP 7: HIGHLIGHT NEW ENTRIES (which will only execute if the 'previous' worksheet exists) 
 ' */
 
     Dim wsPreviousFilteredData As Worksheet
@@ -605,8 +605,66 @@ End If
         End If
     Next i
 
+    ' /*
+' STEP 8: IDENTIFY MISSING VALUES AND APPEND TO SUMMARY
+' */
+
+Dim missingValues() As Variant
+Dim missingCount As Long
+Dim missingStartRow As Long
+Dim missingValue As Variant
+Dim index As Long
+Dim foundMissing As Boolean
+
+' Initialize variables for the missing values list
+missingCount = 0
+
+' Loop through each entry in the previous dataset to find missing values
+For i = 1 To UBound(arrPreviousWorkOrders, 1)
+    foundMissing = True
+
+    ' Compare each previous work order against the latest dataset
+    For j = 1 To UBound(arrLatestWorkOrders, 1)
+        If arrPreviousWorkOrders(i, 1) = arrLatestWorkOrders(j, 1) Then
+            foundMissing = False
+            Exit For
+        End If
+    Next j
+
+    ' If the work order from the previous dataset is not found in the latest dataset, it is missing
+    If foundMissing Then
+        missingCount = missingCount + 1
+        ReDim Preserve missingValues(1 To missingCount)
+        missingValues(missingCount) = arrPreviousWorkOrders(i, 1)
+    End If
+Next i
+
+' If there are missing values, append them below the summary
+If missingCount > 0 Then
+    ' Determine the start row for appending missing values
+    missingStartRow = summaryEndRow + 2
+
+    ' Write the header for the missing values
+    wsFilteredData.Cells(missingStartRow, 1).Value = "MISSING WORK_UNIT_CD"
+    
+    ' Write the missing values below the header
+    For index = 1 To missingCount
+        wsFilteredData.Cells(missingStartRow + index, 1).Value = missingValues(index)
+    Next index
+
+    ' Apply formatting to the missing values section
+    With wsFilteredData
+        .Range(.Cells(missingStartRow, 1), .Cells(missingStartRow + missingCount, 1)).Font.Bold = True
+        .Range(.Cells(missingStartRow, 1), .Cells(missingStartRow + missingCount, 1)).Font.Italic = True
+        .Range(.Cells(missingStartRow, 1), .Cells(missingStartRow + missingCount, 1)).HorizontalAlignment = xlLeft
+        .Range(.Cells(missingStartRow, 1), .Cells(missingStartRow + missingCount, 1)).Borders.LineStyle = xlContinuous
+        .Range(.Cells(missingStartRow, 1), .Cells(missingStartRow + missingCount, 1)).Borders.Color = vbBlack
+    End With
+End If
+
+
 ' /*
-' STEP 9: DELETE `previous` WORKSHEET AS WE WILL NO LONGER BE NEEDING IT.
+' SIDE (non-essential) STEP: DELETE `previous` WORKSHEET AS WE WILL NO LONGER BE NEEDING IT.
 ' */
     On Error Resume Next
     Application.DisplayAlerts = False
