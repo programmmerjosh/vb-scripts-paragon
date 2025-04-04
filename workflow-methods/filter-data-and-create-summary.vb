@@ -1,3 +1,26 @@
+Function GetLastRowBeforeBlanks(ws As Worksheet, colIndex As Long, Optional startRow As Long = 2) As Long
+    Dim dataCol As Variant
+    Dim i As Long
+    Dim lastRow As Long
+
+    ' Load the column into an array (from startRow to the bottom of the worksheet)
+    With ws
+        dataCol = .Range(.Cells(startRow, colIndex), .Cells(.Rows.Count, colIndex)).Value
+    End With
+
+    ' Scan until we find two consecutive blanks
+    For i = 1 To UBound(dataCol) - 1
+        If Trim(dataCol(i, 1)) = "" And Trim(dataCol(i + 1, 1)) = "" Then
+            Exit For
+        ElseIf Trim(dataCol(i, 1)) <> "" Then
+            lastRow = i
+        End If
+    Next i
+
+    ' Return the correct worksheet row number
+    GetLastRowBeforeBlanks = lastRow + startRow - 1
+End Function
+
 Sub FilterDataAndCreateSummary()
 
 ' Define constants
@@ -394,8 +417,8 @@ End If
         Exit Sub
     End If
     
-    ' Find the last rows
-    lastRowDataset = wsFilteredData.Cells(wsFilteredData.Rows.Count, outerCol.Column).End(xlUp).Row
+    ' Find the last rows (using a different formula here now because we have another table below our desired dataset)
+    lastRowDataset = GetLastRowBeforeBlanks(wsFilteredData, stmtCNCol.Column)
     lastRowOutersKey = wsOutersKey.Cells(wsOutersKey.Rows.Count, 1).End(xlUp).Row
     
     ' Initialize arrays for OUTER values, SUM values, and STOCK_LOCATION
