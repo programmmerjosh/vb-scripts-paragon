@@ -1,53 +1,71 @@
-CREDIT: Joshua van Niekerk (and ChatGPT)
+# 📊 Workflow Coordinator Scripts – Paragon
 
-### Description:
-I have leveraged ChatGPT to code up several scripts for me (for my Workflow Coordinator role at Paragon).
-These scripts serve the purpose of calculating and identifying what stock to order (from the warehouse) before the print reaches the machines in production.
+**CREDIT:** *Joshua van Niekerk and ChatGPT ~ Team Effort*
 
-### What The Scripts Do:
-**MergeMySheets** takes all the relevent data from multiple sheets and places it together onto one worksheet called *special* and proceeds to call the next script.
-**FilterDataAndCreateSummary** (The main method) does several things, namely:
-1. Exports the desired columns to a new worksheet called FilteredData
-2. Gets outers based on *CORP_CD*
-3. Highlights *WORK ORDERS* (red) where inserts > 4
-4. Highlights *WORK ORDERS* (orange) where we always need to order those particular outers
-5. Highlights *REMAKES* (yellow)
-6. Calculates a summary
-7. Uses the *previous* worksheet to compare with FilteredData to find new entries (if *previous* exists)
-8. Compares FilteredData (new-list) with *previous* to create an enclosed work order list
-9. Deletes the *special* and *previous* worksheets
+---
 
-### How To Execute The Scripts And What You Need Before You Do:
-To execute both script(s), follow these instructions:
-1. Add the OUTERSKEY worksheet
-    - Open up outers-key.xls
-    - Copy the OUTERSKEY data (from the outers-key.xls)
-    - Paste it in a new worksheet on the Paragon SLA excel spreadhseet
-    - Rename the worksheet *OUTERSKEY*
-2. Rename every worksheet(s) that you want to be included to "s1", "s2", "s3", and so forth. Up to "s8".
-    - The order doesn't matter
-    - It doesn't matter if the "S" is uppercase or lowercase.
-    - So long as the sheetname has an "s" followed by a number 1-8.
-3. Run the MergeMySheets script
-    - You can go to *View* Tab and click on *View Macros* OR press *Alt + F8*
-    - (Optional) setup a shorcut key by clicking on options
-    - Click on *MergeMySheets* and click *Run* OR close the Macros window and use the shortcut key (if you have set one up)
-    - **IMPORTANT NOTE** When running this script for the first time, the *previous* worksheet will not be present. This is absolutely fine. But bear in mind that the next time we want to run the script (to see the new/latest entries for the day), we should rename *FilteredData* to *previous* before we run our script.
+## 📘 Description
 
-### First Time Setup To Run Scripts in MS Excel:
-Enable the Developer Tab: If not already enabled, enable the Developer tab in Excel.
+This project consists of a set of custom VBA scripts designed to assist with daily planning and decision-making in the **Workflow Coordinator role at Paragon**.
 
-Go to File>Options>Customize Ribbon.
-Check Developer in the right-hand list.
+The scripts were collaboratively developed using ChatGPT to streamline and automate complex Excel-based processes that are part of the coordinator’s daily operations.
 
-### How To Add A New Script:
-1. Alt + F11 to open the VBA editor.
-2. Insert a new module (Insert > Module).
-3. Paste the code/script into the module.
-4. Close the VBA editor and return to Excel.
+---
 
-### Send Scripts Via Email
-.vb scripts cannot be attached to an email because the filename flags up as potentially dangerous.
-To get around this, we can rename each file extention to .txt
-EXAMPLE: rename calc-sum-outers.vb to calc-sum-outers.txt
-Then we can attach the file to an email
+## ⚙️ What the Scripts Do
+
+### **1. `MergeMySheets`**
+
+- Collects relevant data from multiple predefined worksheets (e.g. `s1`, `s2`, ..., `s8`)
+- Combines them into a single new worksheet named **`special`**
+- Once merged, it calls the main script: `FilterDataAndCreateSummary`
+
+---
+
+### **2. `FilterDataAndCreateSummary`** *(Main method)*
+
+Performs a comprehensive set of tasks to clean, analyze, and present the data:
+
+#### ✅ Step-by-step breakdown:
+1. **Export desired columns**  
+   → Creates a new worksheet called `FilteredData` with only relevant fields.
+
+2. **Match `OUTER` values based on `CORP_CD`**  
+   → Uses a reference sheet (`outerskey`) to classify and map data.
+
+3. **Highlight high insert counts**  
+   → Flags work orders in **red** where `INSERT_CNT > 4`.
+
+4. **Highlight critical outers**  
+   → Flags specific work orders in **orange** for outers we always need to order (even with zero inserts).
+
+5. **Highlight remakes**  
+   → Flags rows in **yellow** if there's a remake count (`REM_MC_CNT` present).
+
+6. **Generate a summary table**  
+   → Aggregates total counts by `OUTER` and maps stock locations.
+
+7. **Compare against previous list** *(if available)*  
+   → If a `previous` worksheet exists, compares it to highlight **new entries** in **blue**.
+
+8. **Create enclosed work order list**  
+   → Identifies any `WORK_UNIT_CD`s that were in the `previous` list but not in the current one — these are added to the bottom of the report.
+
+9. **Cleanup**  
+   → Deletes both `special` and `previous` worksheets at the end of the run to avoid clutter.
+
+---
+
+## 🧠 Notes
+- Designed for Excel and maintained in VBA (`.bas` file or directly inside the workbook).
+- All outputs are visually formatted for print-readiness (e.g., borders, colors, headers, merged cells).
+- Date/time stamp added to the header for quick reference.
+
+---
+
+## 🏁 Getting Started
+
+To run the process:
+1. Ensure the source sheets (`s1` to `s8`), `outerskey`, and optional `previous` sheet are present.
+2. Run the macro: `MergeMySheets`
+3. Let the automation handle the rest 🚀
