@@ -1,3 +1,249 @@
+Sub FilterDataAndCreateSummary()
+    ' Define constants
+    Dim cYellow As Long
+    Dim cPink As Long 
+    Dim cRed As Long 
+    Dim cOrange As Long
+    Dim cBlue As Long 
+
+    ' Set constants
+    cYellow = RGB(255, 255, 0)
+    cPink = RGB(238, 143, 204)
+    cRed = RGB(255, 111, 145)
+    cOrange = RGB(255, 171, 96)
+    cBlue = RGB(164, 249, 232)
+
+    Dim wsSpecial As Worksheet
+    Dim wsFilteredData As Worksheet
+    Dim keepList As Variant
+
+    ' /*
+    ' STEP 1: EXPORT DESIRED COLUMNS TO NEW WORKSHEET CALLED FilteredData
+    ' */
+
+    Set wsSpecial = GetSheetOrExit("special")
+    If wsSpecial Is Nothing Then Exit Sub
+
+    Set wsFilteredData = CreateFilteredDataSheet()
+    If wsFilteredData Is Nothing Then Exit Sub
+
+    keepList = Array("PARENT_NM", "CORP_CD", "WORK_UNIT_CD", "STMT_CNT", "INSERT_CNT", "REM_MC_CNT", "PLAN_TYPE_CD")
+
+    Call CopyColumnsByHeader(wsSpecial, wsFilteredData, keepList)
+    Call SortByColumn(wsFilteredData, "WORK_UNIT_CD")
+
+    ' /*
+    ' STEP 2: GET OUTERS BASED ON CORP_CD
+    ' */
+
+    Dim wsOutersKey As Worksheet
+    Dim datasetCORPCol As Range, planTypeCol As Range, outerCol As Range
+    Dim sortedOuters() As Collection
+    Dim lastRowDataset As Long
+
+    Set wsOutersKey = GetSheetOrExit("outerskey")
+    If wsOutersKey Is Nothing Then Exit Sub
+
+    ' Validate required columns in each sheet
+    If Not ValidateRequiredColumns(wsFilteredData, Array("CORP_CD", "PLAN_TYPE_CD")) Then Exit Sub
+    If Not ValidateRequiredColumns(wsOutersKey, Array("CORP_CD", "C5_OUTER", "C4_OUTER", "DL_OUTER")) Then Exit Sub
+
+    Set datasetCORPCol = wsFilteredData.Rows(1).Find("CORP_CD")
+    Set planTypeCol = wsFilteredData.Rows(1).Find("PLAN_TYPE_CD")
+    Set outerCol = GetOrCreateColumn(wsFilteredData, "OUTER")
+
+    lastRowDataset = GetLastRowBeforeBlanks(wsFilteredData, datasetCORPCol.Column)
+    sortedOuters = BuildOuterLookup(wsOutersKey, "CORP_CD")
+    Call MapOutersToDataset(wsFilteredData, datasetCORPCol.Column, planTypeCol.Column, outerCol.Column, sortedOuters)
+
+    ' /*
+    ' Side STEP: HIGHLIGHT OUTERS WE ALWAYS NEED TO ORDER (even when they have zero inserts)
+    ' */
+
+    Call HighlightAlwaysOrderedOuters(wsFilteredData, outerCol.Column, datasetCORPCol.Column)
+    Call FormatFilteredDataSheet(wsFilteredData, lastRowDataset)
+
+    ' /*
+    ' STEP 3: HIGHLIGHT WORK ORDERS AND INSERTS WHERE INSERTS > 4
+    ' */
+    
+    Call HighlightHighInsertCounts(wsFilteredData, "WORK_UNIT_CD", "INSERT_CNT", 4, RGB(255, 111, 145)) ' cRed
+
+    ' /*
+    ' STEP 4: HIGHLIGHT REMAKES
+    ' */
+
+    Call HighlightRemakes(wsFilteredData, "REM_MC_CNT", RGB(255, 255, 0)) ' cYellow
+
+    ' /*
+    ' STEP 5: CREATE A COLOUR KEY ON FilteredData
+    ' */
+
+    Call AddColorKey(wsFilteredData, 1, 6, _
+    Array("Remakes", "C4 Outers", "Work Orders Of Jobs With Inserts", "Work Orders Of Jobs With Outers We Should Order (0 Inserts)", "New Entries"), _
+    Array(cYellow, cPink, cRed, cOrange, cBlue), _
+    "Color Key")
+
+    ' /*
+    ' STEP 6: CALCULATE A SUMMARY
+    ' */
+    Dim summaryStartRow As Long
+    Dim summaryEndRow As Long
+
+    summaryStartRow = lastRowDataset + 14
+    summaryData = GenerateOuterSummary(wsFilteredData, wsOutersKey, lastRowDataset)
+    summaryEndRow = summaryStartRow + UBound(summaryData, 2)
+
+    Call WriteSummaryTable(wsFilteredData, summaryData, summaryStartRow)
+    Call SortSummary(wsFilteredData, summaryStartRow, summaryEndRow)
+    Call FormatSummaryTable(wsFilteredData, summaryStartRow, summaryEndRow)
+
+    ' /*
+    ' SIDE (non-essential) STEP: DELETE special WORKSHEET AS WE WILL NO LONGER BE NEEDING IT.
+    ' */
+
+    Call DeleteSheetIfExists("special")
+
+    ' /*
+    ' SIDE (non-essential) STEP: ADD DATE AND TIME to the right header (for printing purposes).
+    ' */
+
+    Call AddTimestampToHeader(wsFilteredData)
+
+    ' /*
+    ' STEP 7: HIGHLIGHT NEW ENTRIES (which will only execute if the 'previous' worksheet exists) 
+    ' */
+    Dim arrLatestWorkOrders As Variant, arrPreviousWorkOrders As Variant
+    Dim wsPreviousFilteredData As Worksheet
+    Dim lastRowPreviousDataset As Long
+    Dim prevStmtCol As Range
+
+    If SheetExists("previous") Then
+        Set wsPreviousFilteredData = ThisWorkbook.Sheets("previous")
+        Set prevStmtCol = wsPreviousFilteredData.Rows(1).Find("STMT_CNT")
+
+        If Not prevStmtCol Is Nothing Then
+            lastRowPreviousDataset = GetLastRowBeforeBlanks(wsPreviousFilteredData, prevStmtCol.Column)
+        Else
+            MsgBox "`STMT_CNT` column not found in 'previous' sheet!", vbExclamation
+            Exit Sub
+        End If
+
+        arrLatestWorkOrders = GetWorkUnitArray(wsFilteredData, "WORK_UNIT_CD", lastRowDataset)
+        arrPreviousWorkOrders = GetWorkUnitArray(wsPreviousFilteredData, "WORK_UNIT_CD", lastRowPreviousDataset)
+
+        Call HighlightNewWorkOrders(wsFilteredData, arrPreviousWorkOrders, arrLatestWorkOrders, "WORK_UNIT_CD", cBlue)
+    Else
+        MsgBox "The script has run successfully!!", vbInformation
+        MsgBox "Important Note: `previous` worksheet is missing. Rename `FilteredData` to `previous` before you run this script again to see the new entries.", vbInformation
+        Exit Sub
+    End If
+
+    ' /*
+    ' STEP 8: IDENTIFY MISSING VALUES AND APPEND TO SUMMARY
+    ' */
+
+    Call AppendMissingWorkUnits(wsFilteredData, arrPreviousWorkOrders, arrLatestWorkOrders, summaryEndRow)
+
+    ' /*
+    ' SIDE (non-essential) STEP: DELETE `previous` WORKSHEET AS WE WILL NO LONGER BE NEEDING IT.
+    ' */
+
+    Call DeleteSheetIfExists("previous")
+    
+    MsgBox "The script has run successfully!!", vbInformation
+
+End Sub
+
+' === Supporting Functions Of FilterDataAndCreateSummary() [START] ===
+
+' For STEP 1 (1 of 4)
+Function GetSheetOrExit(sheetName As String) As Worksheet
+    On Error Resume Next
+    Set GetSheetOrExit = ThisWorkbook.Sheets(sheetName)
+    On Error GoTo 0
+
+    If GetSheetOrExit Is Nothing Then
+        MsgBox "`" & sheetName & "` worksheet is missing.", vbExclamation
+    End If
+End Function
+
+' For STEP 1 (2 of 4)
+Function CreateFilteredDataSheet() As Worksheet
+    On Error Resume Next
+    Set CreateFilteredDataSheet = ThisWorkbook.Sheets("FilteredData")
+    On Error GoTo 0
+
+    If Not CreateFilteredDataSheet Is Nothing Then
+        MsgBox "`FilteredData` already exists. Please delete or rename it.", vbExclamation
+        Set CreateFilteredDataSheet = Nothing
+    Else
+        Set CreateFilteredDataSheet = ThisWorkbook.Sheets.Add
+        CreateFilteredDataSheet.Name = "FilteredData"
+    End If
+End Function
+
+' For STEP 1 (3 of 4)
+Sub CopyColumnsByHeader(wsSource As Worksheet, wsTarget As Worksheet, columnNames As Variant)
+    Dim headers As Range
+    Dim colName As Variant
+    Dim i As Long, targetCol As Long
+
+    Set headers = wsSource.Rows(1)
+    targetCol = 1
+
+    For Each colName In columnNames
+        For i = 1 To headers.Columns.Count
+            If wsSource.Cells(1, i).Value = colName Then
+                wsSource.Columns(i).Copy Destination:=wsTarget.Cells(1, targetCol)
+                targetCol = targetCol + 1
+                Exit For
+            End If
+        Next i
+    Next colName
+End Sub
+
+' For STEP 1 (4 of 4)
+Sub SortByColumn(ws As Worksheet, columnHeader As String)
+    Dim col As Range
+    Dim lastRow As Long
+
+    Set col = ws.Rows(1).Find(columnHeader)
+    If col Is Nothing Then
+        MsgBox "Column '" & columnHeader & "' not found.", vbExclamation
+        Exit Sub
+    End If
+
+    lastRow = ws.Cells(ws.Rows.Count, col.Column).End(xlUp).Row
+
+    ws.Sort.SortFields.Clear
+    ws.Sort.SortFields.Add Key:=ws.Columns(col.Column), Order:=xlAscending
+
+    With ws.Sort
+        .SetRange ws.UsedRange
+        .Header = xlYes
+        .MatchCase = False
+        .Orientation = xlTopToBottom
+        .Apply
+    End With
+End Sub
+
+' For STEP 2 (1 of 5)
+Function GetOrCreateColumn(ws As Worksheet, headerName As String) As Range
+    Dim col As Range
+    Set col = ws.Rows(1).Find(headerName, LookIn:=xlValues, LookAt:=xlWhole)
+    
+    If col Is Nothing Then
+        Dim lastCol As Long
+        lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column + 1
+        ws.Cells(1, lastCol).Value = headerName
+        Set GetOrCreateColumn = ws.Cells(1, lastCol)
+    Else
+        Set GetOrCreateColumn = col
+    End If
+End Function
+
+' For STEP 2 (2 of 5)
 Function GetLastRowBeforeBlanks(ws As Worksheet, colIndex As Long, Optional startRow As Long = 2) As Long
     Dim dataCol As Variant
     Dim i As Long
@@ -21,194 +267,77 @@ Function GetLastRowBeforeBlanks(ws As Worksheet, colIndex As Long, Optional star
     GetLastRowBeforeBlanks = lastRow + startRow - 1
 End Function
 
-Sub FilterDataAndCreateSummary()
-
-' Define constants
-Dim cYellow As Long
-Dim cPink As Long 
-Dim cRed As Long 
-Dim cOrange As Long
-Dim cBlue As Long 
-
-' Set constants
-cYellow = RGB(255, 255, 0)
-cPink = RGB(238, 143, 204)
-cRed = RGB(255, 111, 145)
-cOrange = RGB(255, 171, 96)
-cBlue = RGB(164, 249, 232)
-
-Dim wsSpecial As Worksheet, wsFilteredData As Worksheet
-
-' Set source worksheet
-On Error Resume Next
-Set wsSpecial = ThisWorkbook.Sheets("special") ' Update to your sheet name
-On Error GoTo 0
-
-
-' If wsSpecial is missing, just exit
-If wsSpecial Is Nothing Then
-    MsgBox "`special` worksheet is missing. Please rename your worksheet to `special`", vbInformation
-    Exit Sub
-End If
-
-' /*
-' STEP 1: EXPORT DESIRED COLUMNS TO NEW WORKSHEET CALLED FilteredData
-' */
-
+' For STEP 2 (3 of 5)
+Function ValidateRequiredColumns(ws As Worksheet, requiredCols As Variant) As Boolean
     Dim colName As Variant
-    Dim headers As Range
-    Dim keepList As Variant
-    Dim i As Long
-    Dim workUnitCol As Range
-    Dim lastRow As Long
-    Dim targetCol As Long
+    Dim col As Range
 
-    ' Check if the sheet exists before proceeding
-    On Error Resume Next
-    Set wsFilteredData = ThisWorkbook.Sheets("FilteredData")
-    On Error GoTo 0 ' Reset error handling
-    If Not wsFilteredData Is Nothing Then
-        'Warn user that FilteredData already exists!
-        MsgBox "`FilteredData` already exists!! For this script to execute properly, either delete `FilteredData` or rename it to `previous`", vbExclamation
-        Exit Sub
-    Else
-        ' Create a new worksheet for the filtered data
-        Set wsFilteredData = ThisWorkbook.Sheets.Add
-        wsFilteredData.Name = "FilteredData" ' Change as needed
-    End If
-
-    ' Define the columns to keep
-    keepList = Array("PARENT_NM", "CORP_CD", "WORK_UNIT_CD", "STMT_CNT", "INSERT_CNT", "REM_MC_CNT", "PLAN_TYPE_CD") ' Desired column names
-    Set headers = wsSpecial.Rows(1) ' Assuming headers are in row 1
-
-    ' Copy the keepList columns to the new worksheet
-    targetCol = 1
-    For Each colName In keepList
-        For i = 1 To headers.Columns.Count
-            If wsSpecial.Cells(1, i).Value = colName Then
-                wsSpecial.Columns(i).Copy Destination:=wsFilteredData.Cells(1, targetCol)
-                targetCol = targetCol + 1
-                Exit For
-            End If
-        Next i
+    For Each colName In requiredCols
+        Set col = ws.Rows(1).Find(colName, LookIn:=xlValues, LookAt:=xlWhole)
+        If col Is Nothing Then
+            MsgBox "Missing required column: " & colName, vbExclamation
+            ValidateRequiredColumns = False
+            Exit Function
+        End If
     Next colName
+    ValidateRequiredColumns = True
+End Function
 
-    ' Set reference for WORK_UNIT_CD column
-    Set workUnitCol = wsFilteredData.Rows(1).Find("WORK_UNIT_CD")
-
-    ' Validate that WORK_UNIT_CD column exists
-    If workUnitCol Is Nothing Then
-        MsgBox "Required column `WORK_UNIT_CD` not found!", vbExclamation
-        Exit Sub
-    End If
-
-    ' Sort data by WORK_UNIT_CD
-    lastRow = wsFilteredData.Cells(wsFilteredData.Rows.Count, workUnitCol.Column).End(xlUp).Row
-    wsFilteredData.Sort.SortFields.Clear
-    wsFilteredData.Sort.SortFields.Add key:=wsFilteredData.Columns(workUnitCol.Column), Order:=xlAscending ' Sort by WORK_UNIT_CD
-
-    With wsFilteredData.Sort
-        .SetRange wsFilteredData.UsedRange
-        .Header = xlYes
-        .MatchCase = False
-        .Orientation = xlTopToBottom
-        .Apply
-    End With
-
-' /*
-' STEP 2: GET OUTERS BASED ON CORP_CD
-' */
-
-    Dim wsOutersKey As Worksheet
-    Dim datasetCORPCol As Range, outerCol As Range
-    Dim planTypeCol As Range
-    Dim lastRowDataset As Long, lastRowOutersKey As Long
-    Dim matchLength As Long
-    Dim datasetCORPValue As String, planTypeValue As String, mappedOuter As String
+' For STEP 2 (4 of 5)
+Function BuildOuterLookup(ws As Worksheet, corpColName As String) As Collection()
+    Dim corpCol As Range, c5Col As Range, c4Col As Range, dlCol As Range
+    Dim lastRow As Long, i As Long, matchLength As Long
+    Dim currentCORP As String
     Dim sortedOuters(1 To 6) As Collection
-    Dim entry As Variant
 
-    ' Set OUTERSKEY worksheet
-    On Error Resume Next
-    Set wsOutersKey = ThisWorkbook.Sheets("outerskey") ' Update to your OUTERSKEY sheet name
-    On Error GoTo 0
-    
-    ' If wsSpecial is missing, just exit
-    If wsOutersKey Is Nothing Then
-        MsgBox "`OUTERSKEY` worksheet is missing. Please add the `OUTERSKEY` worksheet.", vbInformation
-        Exit Sub
-    End If
+    Set corpCol = ws.Rows(1).Find(corpColName)
+    Set c5Col = ws.Rows(1).Find("C5_OUTER")
+    Set c4Col = ws.Rows(1).Find("C4_OUTER")
+    Set dlCol = ws.Rows(1).Find("DL_OUTER")
 
-    ' Find the relevant columns in the dataset
-    Set datasetCORPCol = wsFilteredData.Rows(1).Find("CORP_CD")
-    Set planTypeCol = wsFilteredData.Rows(1).Find("PLAN_TYPE_CD")
-    Set outerCol = wsFilteredData.Rows(1).Find("OUTER")
-
-    ' Check if OUTER column exists
-    If outerCol Is Nothing Then
-        Dim lastColumn As Long
-        lastColumn = wsFilteredData.Cells(1, wsFilteredData.Columns.Count).End(xlToLeft).Column + 1
-        wsFilteredData.Cells(1, lastColumn).Value = "OUTER"
-        Set outerCol = wsFilteredData.Cells(1, lastColumn)
-    End If
-
-    ' Find the relevant columns in OUTERSKEY
-    Dim outC5OuterCol As Range, outC4OuterCol As Range, outDLOuterCol As Range, outerCORPCol As Range
-    Set outC5OuterCol = wsOutersKey.Rows(1).Find("C5_OUTER")
-    Set outC4OuterCol = wsOutersKey.Rows(1).Find("C4_OUTER")
-    Set outDLOuterCol = wsOutersKey.Rows(1).Find("DL_OUTER")
-    Set outerCORPCol = wsOutersKey.Rows(1).Find("CORP_CD")
-
-    ' Validate columns exist
-    If datasetCORPCol Is Nothing Or planTypeCol Is Nothing Then
-        MsgBox "One or more of the required columns `CORP_CD`, `PLAN_TYPE_CD` not found in special!", vbExclamation
-        Exit Sub
-    End If
-    If outerCORPCol Is Nothing Or outC5OuterCol Is Nothing Or outC4OuterCol Is Nothing Or outDLOuterCol Is Nothing Then
-        MsgBox "One or more of the required columns `CORP_CD`, `C5_OUTER`, `C4_OUTER`, `DL_OUTER` not found in OUTERSKEY!", vbExclamation
-        Exit Sub
-    End If
-
-    ' Populate sortedOuters based on CORP_CD length
-    lastRowOutersKey = wsOutersKey.Cells(wsOutersKey.Rows.Count, outerCORPCol.Column).End(xlUp).Row
+    lastRow = ws.Cells(ws.Rows.Count, corpCol.Column).End(xlUp).Row
     For matchLength = 1 To 6
         Set sortedOuters(matchLength) = New Collection
     Next matchLength
-    For i = 2 To lastRowOutersKey
-        Dim currentCORP As String
-        currentCORP = Trim(wsOutersKey.Cells(i, outerCORPCol.Column).Value)
+
+    For i = 2 To lastRow
+        currentCORP = Trim(ws.Cells(i, corpCol.Column).Value)
         matchLength = Len(currentCORP)
         If matchLength >= 1 And matchLength <= 6 Then
             sortedOuters(matchLength).Add Array(currentCORP, _
-                                                wsOutersKey.Cells(i, outC5OuterCol.Column).Value, _
-                                                wsOutersKey.Cells(i, outC4OuterCol.Column).Value, _
-                                                wsOutersKey.Cells(i, outDLOuterCol.Column).Value)
+                                                ws.Cells(i, c5Col.Column).Value, _
+                                                ws.Cells(i, c4Col.Column).Value, _
+                                                ws.Cells(i, dlCol.Column).Value)
         End If
     Next i
 
-    ' Map the OUTERSKEY entries to the dataset
-    lastRowDataset = wsFilteredData.Cells(wsFilteredData.Rows.Count, datasetCORPCol.Column).End(xlUp).Row
-    For i = 2 To lastRowDataset
-        datasetCORPValue = Trim(wsFilteredData.Cells(i, datasetCORPCol.Column).Value)
-        planTypeValue = Trim(wsFilteredData.Cells(i, planTypeCol.Column).Value)
+    BuildOuterLookup = sortedOuters
+End Function
+
+' For STEP 2 (5 of 5)
+Sub MapOutersToDataset(ws As Worksheet, corpCol As Long, planCol As Long, outerCol As Long, sortedOuters() As Collection)
+    Dim i As Long, matchLength As Long
+    Dim lastRow As Long
+    Dim corpVal As String, planVal As String, mappedOuter As String
+    Dim entry As Variant
+
+    lastRow = ws.Cells(ws.Rows.Count, corpCol).End(xlUp).Row
+
+    For i = 2 To lastRow
+        corpVal = Trim(ws.Cells(i, corpCol).Value)
+        planVal = Trim(ws.Cells(i, planCol).Value)
         mappedOuter = ""
 
         For matchLength = 6 To 1 Step -1
             For Each entry In sortedOuters(matchLength)
-                If Left(datasetCORPValue, Len(entry(0))) = entry(0) Then
-                    If planTypeValue = "V" Or planTypeValue = "F" Then
-                        mappedOuter = entry(2) ' Use C4_OUTER
-                        ' /*
-                        ' Side STEP: HIGHLIGHT C4 OUTERS
-                        ' */
-
-                        ' also highlight cells where PLAN_TYPE is V or F (and OUTER in the same row)
-                        ' wsFilteredData.Cells(i, planTypeCol.Column).Interior.Color = cPink
-                        wsFilteredData.Cells(i, outerCol.Column).Interior.Color = cPink
+                If Left(corpVal, Len(entry(0))) = entry(0) Then
+                    If planVal = "V" Or planVal = "F" Then
+                        mappedOuter = entry(2) ' C4_OUTER
+                        ws.Cells(i, outerCol).Interior.Color = RGB(238, 143, 204) ' cPink
                     ElseIf entry(1) <> "" Then
-                        mappedOuter = entry(1) ' Use C5_OUTER
+                        mappedOuter = entry(1) ' C5_OUTER
                     Else
-                        mappedOuter = entry(3) ' Use DL_OUTER
+                        mappedOuter = entry(3) ' DL_OUTER
                     End If
                     Exit For
                 End If
@@ -216,499 +345,438 @@ End If
             If mappedOuter <> "" Then Exit For
         Next matchLength
 
-        ' Update the OUTER column
-        wsFilteredData.Cells(i, outerCol.Column).Value = mappedOuter
+        ws.Cells(i, outerCol).Value = mappedOuter
+    Next i
+End Sub
 
-        ' /*
-        ' Side STEP: HIGHLIGHT OUTERS WE ALWAYS NEED TO ORDER (even when they have zero inserts)
-        ' */
+' For SIDE STEP between 2 & 3 (1 of 2)
+Sub HighlightAlwaysOrderedOuters(ws As Worksheet, outerColIndex As Long, workUnitColIndex As Long)
+    Dim i As Long, lastRow As Long
+    Dim myOuter As String
+    Dim outersToOrder As Variant
+    Dim count As Integer
 
-        Dim outersToOrder As Variant
-        Dim myOuter As String
-        Dim matchFound As Boolean
-        Dim count As Integer
+    outersToOrder = Array("50023", "BCY03", "BCORPC5AIR", "BARCLPC52", "GCRPC524TNT", "EOP39TNT", "BSMTNT")
 
-        ' Define the array of string values
-        outersToOrder = Array("50023", "BCY03", "BCORPC5AIR", "BARCLPC52", "GCRP5254TNT", "EOP39TNT", "BSMTNT")
+    lastRow = ws.Cells(ws.Rows.Count, outerColIndex).End(xlUp).Row
 
-        ' Define the variable to compare
-        myOuter = wsFilteredData.Cells(i, outerCol.Column).Value
-        matchFound = False
-
-        ' Loop through the array and compare each value to myOuter
+    For i = 2 To lastRow
+        myOuter = ws.Cells(i, outerColIndex).Value
         For count = LBound(outersToOrder) To UBound(outersToOrder)
             If StrComp(outersToOrder(count), myOuter, vbTextCompare) = 0 Then
-                ' wsFilteredData.Cells(i, outerCol.Column).Interior.Color = cOrange
-                wsFilteredData.Cells(i, workUnitCol.Column).Interior.Color = cOrange
-                matchFound = True
-                Exit For ' Exit the loop since we found a match
+                ws.Cells(i, workUnitColIndex).Interior.Color = RGB(255, 171, 96) ' cOrange
+                Exit For
             End If
         Next count
     Next i
+End Sub
 
-    ' Apply formatting to wsFilteredData
-    With wsFilteredData
-        
-        ' Left-align first column
+' For SIDE STEP between 2 & 3 (2 of 2)
+Sub FormatFilteredDataSheet(ws As Worksheet, lastRow As Long)
+    With ws
+        ' Align column H (column 8)
         .Columns(8).HorizontalAlignment = xlLeft
 
-        ' Shrink column widths where necessary
-        Columns("A").ColumnWidth = 8
-        Columns("B").ColumnWidth = 8
-        Columns("C").ColumnWidth = 8
-        Columns("D").ColumnWidth = 8.5
-        Columns("E").ColumnWidth = 7.5
-        Columns("F").ColumnWidth = 6.5
-        Columns("G").ColumnWidth = 3
-        Columns("H").ColumnWidth = 16
+        ' Set column widths (A to H)
+        .Columns("A").ColumnWidth = 8
+        .Columns("B").ColumnWidth = 8
+        .Columns("C").ColumnWidth = 8
+        .Columns("D").ColumnWidth = 8.5
+        .Columns("E").ColumnWidth = 7.5
+        .Columns("F").ColumnWidth = 6.5
+        .Columns("G").ColumnWidth = 3
+        .Columns("H").ColumnWidth = 16
 
-        ' FORMAT column where we want the thousand separator (NOTE: the 4, 5, and 6 and referencing the 4th, 5th, and 6th columns)
+        ' Apply number formatting with thousand separator (Columns 4, 5, 6)
         .Range(.Cells(2, 4), .Cells(lastRow, 4)).NumberFormat = "#,##0"
         .Range(.Cells(2, 5), .Cells(lastRow, 5)).NumberFormat = "#,##0"
         .Range(.Cells(2, 6), .Cells(lastRow, 6)).NumberFormat = "#,##0"
 
-    ' Apply borders to all data cells
-        With .Range(.Cells(1, 1), .Cells(lastRowDataset, 8)).Borders 'using 8 as we have 8 columns to border
+        ' Apply borders to data
+        With .Range(.Cells(1, 1), .Cells(lastRow, 8)).Borders
             .LineStyle = xlContinuous
             .Color = vbBlack
             .Weight = xlThin
         End With
     End With
+End Sub
 
-' /*
-' STEP 3: HIGHLIGHT WORK ORDERS AND INSERTS WHERE INSERTS > 4
-' */
+' For STEP 3
+Sub HighlightHighInsertCounts(ws As Worksheet, workUnitColName As String, insertColName As String, threshold As Long, colorCode As Long)
+    Dim workUnitCol As Range, insertCol As Range
+    Dim insertValue As Variant
+    Dim lastRow As Long, i As Long
 
-    Dim insertCntCol As Range
-    Dim insertCntValue As Variant
-    
-    ' Find the columns for WORK_UNIT_CD and INSERT_CNT
-    Set workUnitCol = wsFilteredData.Rows(1).Find("WORK_UNIT_CD")
-    Set insertCntCol = wsFilteredData.Rows(1).Find("INSERT_CNT")
-    
-    ' Validate the columns exist
-    If workUnitCol Is Nothing Or insertCntCol Is Nothing Then
-        MsgBox "One or more of the required columns `WORK_UNIT_CD`, `INSERT_CNT` not found!", vbExclamation
+    Set workUnitCol = ws.Rows(1).Find(workUnitColName, LookIn:=xlValues, LookAt:=xlWhole)
+    Set insertCol = ws.Rows(1).Find(insertColName, LookIn:=xlValues, LookAt:=xlWhole)
+
+    If workUnitCol Is Nothing Or insertCol Is Nothing Then
+        MsgBox "Required columns '" & workUnitColName & "' or '" & insertColName & "' not found!", vbExclamation
         Exit Sub
     End If
-    
-    ' Loop through each row to check the INSERT_CNT value
+
+    lastRow = ws.Cells(ws.Rows.Count, insertCol.Column).End(xlUp).Row
+
     For i = 2 To lastRow
-        insertCntValue = wsFilteredData.Cells(i, insertCntCol.Column).Value
-        
-        ' Check if INSERT_CNT is greater than 9
-        If IsNumeric(insertCntValue) And insertCntValue > 4 Then
-            ' Highlight WORK_UNIT_CD 
-            wsFilteredData.Cells(i, workUnitCol.Column).Interior.Color = cRed
-            ' Highlight INSERT_CNT
-            ' wsFilteredData.Cells(i, insertCntCol.Column).Interior.Color = cRed
+        insertValue = ws.Cells(i, insertCol.Column).Value
+        If IsNumeric(insertValue) And insertValue > threshold Then
+            ws.Cells(i, workUnitCol.Column).Interior.Color = colorCode
+            ' Optional: also highlight insert count cell itself
+            ' ws.Cells(i, insertCol.Column).Interior.Color = colorCode
         End If
     Next i
+End Sub
 
-' /*
-' STEP 4: HIGHLIGHT REMAKES
-' */
+' For STEP 4
+Sub HighlightRemakes(ws As Worksheet, remColName As String, highlightColor As Long)
+    Dim remCol As Range
+    Dim lastRow As Long, lastCol As Long, i As Long
 
-    Dim remCountCol As Range
-
-    ' Find the REM_MC_CNT column
-    Set remCountCol = wsFilteredData.Rows(1).Find("REM_MC_CNT")
-
-    ' Validate that REM_MC_CNT column exists
-    If remCountCol Is Nothing Then
-        MsgBox "`REM_MC_CNT` column was not found!", vbExclamation
+    Set remCol = ws.Rows(1).Find(remColName, LookIn:=xlValues, LookAt:=xlWhole)
+    If remCol Is Nothing Then
+        MsgBox "`" & remColName & "` column was not found!", vbExclamation
         Exit Sub
     End If
 
-    ' Loop through each row in the REM_MC_CNT column
-    For i = 2 To lastRow ' Assuming headers are in row 1
-        If wsFilteredData.Cells(i, remCountCol.Column).Value <> "" Then
-            ' Highlight the row up to the last column
-            wsFilteredData.Range(wsFilteredData.Cells(i, 1), wsFilteredData.Cells(i, lastColumn)).Interior.Color = cYellow
+    lastRow = ws.Cells(ws.Rows.Count, remCol.Column).End(xlUp).Row
+    lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
+
+    For i = 2 To lastRow
+        If Trim(ws.Cells(i, remCol.Column).Value) <> "" Then
+            ws.Range(ws.Cells(i, 1), ws.Cells(i, lastCol)).Interior.Color = highlightColor
         End If
     Next i
+End Sub
 
-' /*
-' STEP 5: CREATE A COLOUR KEY ON FilteredData
-' */
+' For STEP 5
+Sub AddColorKey(ws As Worksheet, startCol As Long, mergeCols As Long, keyDescriptions As Variant, keyColors As Variant, headingText As String)
+    Dim startRow As Long, headingRow As Long, endRow As Long
+    Dim i As Long
 
-    Dim startRow As Long, endRow As Long
-    Dim keyDescriptions As Variant
-    Dim keyColors As Variant
-    Dim colorKeyRange As Range
-    Dim numberOfColsToMerge As Long
-
-    numberOfColsToMerge = 6
-    
-    ' Find the first empty row below the data
-    startRow = wsFilteredData.Cells(wsFilteredData.Rows.Count, 1).End(xlUp).Row + 4 ' 4 rows below the last row of data (taking into account the Heading Row)
-
-    ' Calculate the heading row (directly above the color key)
+    ' Find first empty row after data
+    startRow = ws.Cells(ws.Rows.Count, startCol).End(xlUp).Row + 4
     headingRow = startRow - 1
-    
-    ' Add the heading text
-    With wsFilteredData.Range(wsFilteredData.Cells(headingRow, 1), wsFilteredData.Cells(headingRow, numberOfColsToMerge))
-        .Merge ' Merge across columns A to C
-        .Value = "Color Key" ' Set the heading text
-        .HorizontalAlignment = xlCenter ' Center-align the text
+
+    ' Add heading row
+    With ws.Range(ws.Cells(headingRow, startCol), ws.Cells(headingRow, startCol + mergeCols - 1))
+        .Merge
+        .Value = headingText
+        .HorizontalAlignment = xlCenter
         .VerticalAlignment = xlCenter
-        .Font.Bold = True ' Make the text bold
-        .Interior.Color = RGB(200, 200, 200) ' Optional: Light gray background color
+        .Font.Bold = True
+        .Interior.Color = RGB(200, 200, 200)
     End With
-    
-    ' Define the descriptions and their corresponding colors
-    keyDescriptions = Array("Remakes", _
-                            "C4 Outers", _
-                            "Work Orders Of Jobs With Inserts", _
-                            "Work Orders Of Jobs With Outers We Should Order (0 Inserts)", _
-                            "New Entries")
-    keyColors = Array(cYellow, cPink, cRed, cOrange, cBlue)
-    
-    ' Add the color key
+
+    ' Add key rows
     For i = LBound(keyDescriptions) To UBound(keyDescriptions)
-        ' Write the description
-        wsFilteredData.Cells(startRow + i, 1).Value = keyDescriptions(i) ' Column A for descriptions
-        
-        ' Apply the background color to Column A
-        wsFilteredData.Cells(startRow + i, 1).Interior.Color = keyColors(i)
-
-        wsFilteredData.Range(wsFilteredData.Cells(startRow + i, 1), wsFilteredData.Cells(startRow + i, numberOfColsToMerge)).Merge
-    Next i
-
-    ' Find the first row of the color key
-    endRow = wsFilteredData.Cells(wsFilteredData.Rows.Count, 1).End(xlUp).Row
-    
-    ' Combine the heading row and color key range
-    Set colorKeyRange = wsFilteredData.Range(wsFilteredData.Cells(headingRow, 1), wsFilteredData.Cells(endRow, numberOfColsToMerge)) 
-    
-    ' Apply a thin black border to each row in the range
-    For i = headingRow To endRow
-        With wsFilteredData.Range(wsFilteredData.Cells(i, 1), wsFilteredData.Cells(i, numberOfColsToMerge)).Borders
-            .LineStyle = xlContinuous
-            .Weight = xlThin
-            .Color = RGB(0, 0, 0) ' Black border
+        With ws.Range(ws.Cells(startRow + i, startCol), ws.Cells(startRow + i, startCol + mergeCols - 1))
+            .Merge
+            .Value = keyDescriptions(i)
+            .Interior.Color = keyColors(i)
         End With
     Next i
 
-' /*
-' STEP 6: CALCULATE A SUMMARY
-' */
+    ' Apply borders to heading and key
+    endRow = ws.Cells(ws.Rows.Count, startCol).End(xlUp).Row
+    For i = headingRow To endRow
+        With ws.Range(ws.Cells(i, startCol), ws.Cells(i, startCol + mergeCols - 1)).Borders
+            .LineStyle = xlContinuous
+            .Weight = xlThin
+            .Color = RGB(0, 0, 0)
+        End With
+    Next i
+End Sub
 
-    Dim stmtCNCol As Range, remMCCol As Range
-    Dim summaryStartRow As Long
-    Dim outerValue As String, stmtValue As Double, remMCValue As Variant
-    Dim summaryData As Collection, key As Variant
-    Dim idx As Long
-    Dim outerArray() As Variant, stmtSumArray() As Double, stockArray() As Variant 
-    Dim stockLocation As String
-    Dim foundOuter As Boolean
-    Dim summaryEndRow As Long
-    Dim mergedRange As Range
-    
-    ' Find the relevant columns
-    ' Set outerCol = wsFilteredData.Rows(1).Find("OUTER")
-    Set stmtCNCol = wsFilteredData.Rows(1).Find("STMT_CNT")
-    Set remMCCol = wsFilteredData.Rows(1).Find("REM_MC_CNT")
-    ' Set planTypeCol = wsFilteredData.Rows(1).Find("PLAN_TYPE_CD")
-    
-    ' Validate the columns exist in wsFilteredData
-    If outerCol Is Nothing Or stmtCNCol Is Nothing Or remMCCol Is Nothing Or planTypeCol Is Nothing Then
-        MsgBox "Required columns (OUTER, STMT_CNT, REM_MC_CNT, PLAN_TYPE_CD) not found!", vbExclamation
-        Exit Sub
+' For STEP 6 (1 of 4)
+Function GenerateOuterSummary(wsData As Worksheet, wsOutersKey As Worksheet, lastRowDataset As Long) As Variant
+    Dim stmtCol As Range, remCol As Range, planCol As Range, outerCol As Range
+    Dim outerArray() As String, sumArray() As Double, stockArray() As String
+    Dim i As Long, idx As Long
+    Dim found As Boolean, stmtVal As Double, remVal As Variant
+    Dim planVal As String, outerVal As String, stockLoc As String
+    Dim lastRowKey As Long
+
+    Set outerCol = wsData.Rows(1).Find("OUTER")
+    Set stmtCol = wsData.Rows(1).Find("STMT_CNT")
+    Set remCol = wsData.Rows(1).Find("REM_MC_CNT")
+    Set planCol = wsData.Rows(1).Find("PLAN_TYPE_CD")
+
+    If outerCol Is Nothing Or stmtCol Is Nothing Or remCol Is Nothing Or planCol Is Nothing Then
+        MsgBox "Missing required columns in filtered data.", vbExclamation
+        Exit Function
     End If
-    
-    ' Find the last rows (using a different formula here now because we have another table below our desired dataset)
-    lastRowDataset = GetLastRowBeforeBlanks(wsFilteredData, stmtCNCol.Column)
-    lastRowOutersKey = wsOutersKey.Cells(wsOutersKey.Rows.Count, 1).End(xlUp).Row
-    
-    ' Initialize arrays for OUTER values, SUM values, and STOCK_LOCATION
+
+    lastRowKey = wsOutersKey.Cells(wsOutersKey.Rows.Count, 1).End(xlUp).Row
+
     ReDim outerArray(1 To 1)
-    ReDim stmtSumArray(1 To 1) 
+    ReDim sumArray(1 To 1)
     ReDim stockArray(1 To 1)
-    
-    ' Loop through each row in wsFilteredData to calculate sums and map STOCK_LOCATION
+
     For i = 2 To lastRowDataset
-        outerValue = wsFilteredData.Cells(i, outerCol.Column).Value
-        stmtValue = wsFilteredData.Cells(i, stmtCNCol.Column).Value
-        remMCValue = wsFilteredData.Cells(i, remMCCol.Column).Value
-        planTypeValue = wsFilteredData.Cells(i, planTypeCol.Column).Value
-        
-        ' If REM_MC_CNT has a value, use it instead of STMT_CNT
-        If Not IsEmpty(remMCValue) And IsNumeric(remMCValue) Then
-            stmtValue = remMCValue
+        outerVal = wsData.Cells(i, outerCol.Column).Value
+        stmtVal = wsData.Cells(i, stmtCol.Column).Value
+        remVal = wsData.Cells(i, remCol.Column).Value
+        planVal = wsData.Cells(i, planCol.Column).Value
+
+        If Not IsEmpty(remVal) And IsNumeric(remVal) Then
+            stmtVal = remVal
         End If
 
-        If outerValue <> "" Then
-            foundOuter = False
-            stockLocation = ""
-            
-            ' Check if OUTER value already exists in the array
+        If outerVal <> "" Then
+            found = False
             For idx = 1 To UBound(outerArray)
-                If outerArray(idx) = outerValue Then
-                    stmtSumArray(idx) = stmtSumArray(idx) + stmtValue
-                    foundOuter = True
+                If outerArray(idx) = outerVal Then
+                    sumArray(idx) = sumArray(idx) + stmtVal
+                    found = True
                     Exit For
                 End If
             Next idx
 
-            ' If OUTER value not found, add new entry and determine STOCK_LOCATION
-            If Not foundOuter Then
+            If Not found Then
                 ReDim Preserve outerArray(1 To UBound(outerArray) + 1)
-                ReDim Preserve stmtSumArray(1 To UBound(stmtSumArray) + 1)
+                ReDim Preserve sumArray(1 To UBound(sumArray) + 1)
                 ReDim Preserve stockArray(1 To UBound(stockArray) + 1)
 
-                outerArray(UBound(outerArray)) = outerValue
-                stmtSumArray(UBound(stmtSumArray)) = stmtValue
+                outerArray(UBound(outerArray)) = outerVal
+                sumArray(UBound(sumArray)) = stmtVal
+                stockLoc = ""
 
-                ' Map STOCK_LOCATION based on OUTER and PLAN_TYPE_CD
-                For idx = 2 To lastRowOutersKey
-                    If planTypeValue = "V" Or planTypeValue = "F" Then
-                        If wsOutersKey.Cells(idx, 3).Value = outerValue Then ' Match in C4_OUTER
-                            stockLocation = wsOutersKey.Cells(idx, 6).Value ' C4_STOCK_LOCATION
+                For idx = 2 To lastRowKey
+                    If planVal = "V" Or planVal = "F" Then
+                        If wsOutersKey.Cells(idx, 3).Value = outerVal Then
+                            stockLoc = wsOutersKey.Cells(idx, 6).Value
                             Exit For
                         End If
                     Else
-                        If wsOutersKey.Cells(idx, 2).Value = outerValue Then ' Match in C5_OUTER
-                            stockLocation = wsOutersKey.Cells(idx, 5).Value ' C5_STOCK_LOCATION
+                        If wsOutersKey.Cells(idx, 2).Value = outerVal Then
+                            stockLoc = wsOutersKey.Cells(idx, 5).Value
                             Exit For
-                        ElseIf wsOutersKey.Cells(idx, 4).Value = outerValue Then ' Match in DL_OUTER
-                            stockLocation = wsOutersKey.Cells(idx, 7).Value ' DL_STOCK_LOCATION
+                        ElseIf wsOutersKey.Cells(idx, 4).Value = outerVal Then
+                            stockLoc = wsOutersKey.Cells(idx, 7).Value
                             Exit For
                         End If
                     End If
                 Next idx
 
-                stockArray(UBound(stockArray)) = stockLocation
+                stockArray(UBound(stockArray)) = stockLoc
             End If
         End If
     Next i
 
-    ' Determine the start of the summary
-    summaryStartRow = lastRowDataset + 14
-
-    ' Write the summary data
-    wsFilteredData.Cells(summaryStartRow, 1).Value = "OUTER"
-    wsFilteredData.Cells(summaryStartRow, 3).Value = "SUM"
-    wsFilteredData.Cells(summaryStartRow, 4).Value = "STOCK_LOCATION"
+    ' Build 2D summary array
+    Dim summary() As Variant
+    Dim count As Long
+    count = 0
 
     For idx = 1 To UBound(outerArray)
-        rowIdx = summaryStartRow + idx
-
-        wsFilteredData.Cells(rowIdx, 1).Value = outerArray(idx)
-
-        ' Write SUM
-        wsFilteredData.Cells(rowIdx, 3).Value = stmtSumArray(idx)
-
-        wsFilteredData.Cells(rowIdx, 4).Value = stockArray(idx)
-
-        ' Delete rows where SUM is zero
-        If stmtSumArray(idx) = 0 Then ' Check if SUM (Column B) is 0
-            wsFilteredData.Rows(rowIdx).Delete
+        If sumArray(idx) <> 0 Then
+            count = count + 1
+            ReDim Preserve summary(1 To 3, 1 To count)
+            summary(1, count) = outerArray(idx)
+            summary(2, count) = sumArray(idx)
+            summary(3, count) = stockArray(idx)
         End If
     Next idx
 
-    ' Determine the end of the summary
-    summaryEndRow = summaryStartRow + UBound(outerArray)
+    GenerateOuterSummary = summary
+End Function
 
-    ' Sort the summary range
-    With wsFilteredData.Sort
-        .SortFields.Clear  ' Clear any previous sort fields
-        .SortFields.Add key:=wsFilteredData.Columns(1), Order:=xlAscending ' Sort by OUTER column (Column A)
-        
-        .SetRange wsFilteredData.Range(wsFilteredData.Cells(summaryStartRow, 1), wsFilteredData.Cells(summaryEndRow, 4))
+' For STEP 6 (2 of 4)
+Sub WriteSummaryTable(ws As Worksheet, summaryData As Variant, startRow As Long)
+    Dim i As Long, rowIdx As Long
+
+    ' Write headers
+    ws.Cells(startRow, 1).Value = "OUTER"
+    ws.Cells(startRow, 3).Value = "SUM"
+    ws.Cells(startRow, 4).Value = "STOCK_LOCATION"
+
+    ' Write summary data row by row
+    For i = 1 To UBound(summaryData, 2)
+        rowIdx = startRow + i
+        ws.Cells(rowIdx, 1).Value = summaryData(1, i) ' OUTER
+        ws.Cells(rowIdx, 3).Value = summaryData(2, i) ' SUM
+        ws.Cells(rowIdx, 4).Value = summaryData(3, i) ' STOCK_LOCATION
+    Next i
+End Sub
+
+' For STEP 6 (3 of 4)
+Sub SortSummary(ws As Worksheet, startRow As Long, endRow As Long)
+    Dim sortRange As Range
+    Set sortRange = ws.Range(ws.Cells(startRow, 1), ws.Cells(endRow, 4)) ' Col A to D, unmerged
+
+    With ws.Sort
+        .SortFields.Clear
+        .SortFields.Add Key:=ws.Columns(1), Order:=xlAscending
+        .SetRange sortRange
         .Header = xlYes
         .MatchCase = False
         .Orientation = xlTopToBottom
         .Apply
     End With
+End Sub
 
-    ' Apply styling to the summary
-    summaryLastCol = 7 ' Column G
-    With wsFilteredData
-        ' Set headers bold and italic
-        .Range(.Cells(summaryStartRow, 1), .Cells(summaryStartRow, summaryLastCol)).Font.Bold = True
-        .Range(.Cells(summaryStartRow, 1), .Cells(summaryStartRow, summaryLastCol)).Font.Italic = True
+' For STEP 6 (4 of 4)
+Sub FormatSummaryTable(ws As Worksheet, startRow As Long, endRow As Long)
+    Dim i As Long
+    Dim summaryLastCol As Long: summaryLastCol = 7 ' Merge to col G
 
-        .Range(.Cells(summaryStartRow, 1), .Cells(summaryEndRow, 1)).HorizontalAlignment = xlLeft
-
-        ' FORMAT column where we want the thousand separator
-        .Range(.Cells(summaryStartRow, 3), .Cells(summaryEndRow, 3)).NumberFormat = "#,##0"
-
-        ' Apply borders to the summary range
-        With .Range(.Cells(summaryStartRow, 1), .Cells(summaryEndRow, summaryLastCol)).Borders
-            .LineStyle = xlContinuous
-            .Color = vbBlack
-            .Weight = xlThin
-        End With
+    ' Format headers
+    With ws.Range(ws.Cells(startRow, 1), ws.Cells(startRow, summaryLastCol))
+        .Font.Bold = True
+        .Font.Italic = True
     End With
 
-    ' Merge summary heading columns
-    wsFilteredData.Range(wsFilteredData.Cells(summaryStartRow, 1), wsFilteredData.Cells(summaryStartRow, 2)).Merge
-    wsFilteredData.Range(wsFilteredData.Cells(summaryStartRow, 4), wsFilteredData.Cells(summaryStartRow, 7)).Merge
+    ' Format number column (SUM)
+    With ws.Range(ws.Cells(startRow, 3), ws.Cells(endRow, 3))
+        .NumberFormat = "#,##0"
+    End With
 
-     For idx = 1 To UBound(outerArray)
-        rowIdx = summaryStartRow + idx
+    ' Merge header cells
+    ws.Range(ws.Cells(startRow, 1), ws.Cells(startRow, 2)).Merge
+    ws.Range(ws.Cells(startRow, 4), ws.Cells(startRow, summaryLastCol)).Merge
 
-        ' Merge columns for OUTER
-        wsFilteredData.Range(wsFilteredData.Cells(rowIdx, 1), wsFilteredData.Cells(rowIdx, 2)).Merge
+    ' Merge and format each data row
+    For i = startRow + 1 To endRow
+        ws.Range(ws.Cells(i, 1), ws.Cells(i, 2)).Merge
+        ws.Range(ws.Cells(i, 4), ws.Cells(i, summaryLastCol)).Merge
+    Next i
 
-        ' Merge and write STOCK_LOCATION
-        wsFilteredData.Range(wsFilteredData.Cells(rowIdx, 4), wsFilteredData.Cells(rowIdx, 7)).Merge
-    Next idx
+    ' Borders
+    With ws.Range(ws.Cells(startRow, 1), ws.Cells(endRow, summaryLastCol)).Borders
+        .LineStyle = xlContinuous
+        .Color = vbBlack
+        .Weight = xlThin
+    End With
+End Sub
 
-' /*
-' SIDE (non-essential) STEP: DELETE `special` WORKSHEET AS WE WILL NO LONGER BE NEEDING IT.
-' */
+' For SIDE STEP between 6 & 7 (1 of 2)
+Sub DeleteSheetIfExists(sheetName As String)
+    Dim ws As Worksheet
     On Error Resume Next
-    Application.DisplayAlerts = False
-    ThisWorkbook.Sheets("special").Delete
-    Application.DisplayAlerts = True
+    Set ws = ThisWorkbook.Sheets(sheetName)
     On Error GoTo 0
 
-' /*
-' SIDE (non-essential) STEP: ADD DATE AND TIME to the right header (for printing purposes).
-' */
+    If Not ws Is Nothing Then
+        Application.DisplayAlerts = False
+        ws.Delete
+        Application.DisplayAlerts = True
+    End If
+End Sub
 
-    Dim currentDate As String
+' For SIDE STEP between 6 & 7 (2 of 2)
+Sub AddTimestampToHeader(ws As Worksheet)
     Dim formattedDate As String
-
-    ' Get the current date and time in the desired format
     formattedDate = Format(Now, "HH:mm - DD/MM/YYYY")
-    
-    ' Add the formatted date and time to the header
-    With wsFilteredData.PageSetup
+
+    With ws.PageSetup
         .RightHeader = formattedDate
     End With
+End Sub
 
-' /*
-' STEP 7: HIGHLIGHT NEW ENTRIES (which will only execute if the 'previous' worksheet exists) 
-' */
-
-    Dim wsPreviousFilteredData As Worksheet
-    Dim latestWorkOrderCol As Range, previousWorkOrderCol As Range
-    Dim arrLatestWorkOrders As Variant, arrPreviousWorkOrders As Variant
-    Dim lastRowFiltered As Long, lastRowPrevious As Long
-    Dim lastColFiltered As Long, lastColPrevious As Long
-    Dim j As Long
-    Dim isFound As Boolean
-     Dim cell As Range
-
-    ' Set the target worksheets
+' For STEP 7 (1 of 2)
+Function SheetExists(sheetName As Variant) As Boolean
     On Error Resume Next
-    Set wsPreviousFilteredData = ThisWorkbook.Sheets("previous")
+    SheetExists = Not ThisWorkbook.Sheets(CStr(sheetName)) Is Nothing
     On Error GoTo 0
-    
-    ' If wsPreviousFilteredData is missing, just skip comparison
-    If wsPreviousFilteredData Is Nothing Then
-        MsgBox "The script has run successfully!!", vbInformation
-        MsgBox "Important Note: `previous` worksheet is missing. Rename `FilteredData` to `previous` before you run this script again to see the new entries.", vbInformation
+End Function
+
+' For STEP 7 & 8 (helper function)
+Function GetWorkUnitArray(ws As Worksheet, colName As String, Optional lastRowLimit As Long = 0) As Variant
+    Dim colRef As Range
+    Set colRef = ws.Rows(1).Find(colName, LookIn:=xlValues, LookAt:=xlWhole)
+
+    If colRef Is Nothing Then
+        MsgBox "`" & colName & "` column not found!", vbExclamation
+        Exit Function
+    End If
+
+    Dim lastRow As Long
+    If lastRowLimit > 0 Then
+        lastRow = lastRowLimit
+    Else
+        lastRow = ws.Cells(ws.Rows.Count, colRef.Column).End(xlUp).Row
+    End If
+
+    GetWorkUnitArray = ws.Range(ws.Cells(2, colRef.Column), ws.Cells(lastRow, colRef.Column)).Value
+End Function
+
+' For STEP 7 (2 of 2)
+Sub HighlightNewWorkOrders(ws As Worksheet, arrPrevious As Variant, arrLatest As Variant, keyColName As String, highlightColor As Long)
+    Dim currentCol As Range
+    Dim i As Long, j As Long
+    Dim isFound As Boolean
+
+    ' Locate the column in the current worksheet
+    Set currentCol = ws.Rows(1).Find(keyColName, LookIn:=xlValues, LookAt:=xlWhole)
+
+    If currentCol Is Nothing Then
+        MsgBox "`" & keyColName & "` column not found in the filtered sheet!", vbExclamation
         Exit Sub
     End If
 
-    ' Find the last row and column in both worksheets
-    lastRowFiltered = wsFilteredData.Cells(wsFilteredData.Rows.Count, "A").End(xlUp).Row
-    lastRowPrevious = wsPreviousFilteredData.Cells(wsPreviousFilteredData.Rows.Count, "A").End(xlUp).Row
-    lastColFiltered = wsFilteredData.Cells(1, wsFilteredData.Columns.Count).End(xlToLeft).Column
-    lastColPrevious = wsPreviousFilteredData.Cells(1, wsPreviousFilteredData.Columns.Count).End(xlToLeft).Column
-
-    ' Identify the "WORK_UNIT_CD" column in both sheets (assuming column name is in the header)
-    Set latestWorkOrderCol = wsFilteredData.Rows(1).Find("WORK_UNIT_CD", LookIn:=xlValues, LookAt:=xlWhole)
-    Set previousWorkOrderCol = wsPreviousFilteredData.Rows(1).Find("WORK_UNIT_CD", LookIn:=xlValues, LookAt:=xlWhole)
-
-    ' Check if "WORK_UNIT_CD" columns are found
-    If latestWorkOrderCol Is Nothing Or previousWorkOrderCol Is Nothing Then
-        MsgBox "`WORK_UNIT_CD` column not found!", vbExclamation
-        Exit Sub
-    End If
-
-    ' Load WORK_UNIT_CD values into arrays
-    arrLatestWorkOrders = wsFilteredData.Range(wsFilteredData.Cells(2, latestWorkOrderCol.Column), wsFilteredData.Cells(lastRowFiltered, latestWorkOrderCol.Column)).Value
-    arrPreviousWorkOrders = wsPreviousFilteredData.Range(wsPreviousFilteredData.Cells(2, previousWorkOrderCol.Column), wsPreviousFilteredData.Cells(lastRowPrevious, previousWorkOrderCol.Column)).Value
-
-    ' Compare the arrays and highlight rows where WORK_UNIT_CD in arrLatestWorkOrders is not found in arrPreviousWorkOrders
-    For i = 1 To UBound(arrLatestWorkOrders, 1)
+    ' Compare each latest work order to the previous list
+    For i = 1 To UBound(arrLatest, 1)
         isFound = False
-
-        ' Compare each work order in arrLatestWorkOrders with arrPreviousWorkOrders
-        For j = 1 To UBound(arrPreviousWorkOrders, 1)
-            If arrLatestWorkOrders(i, 1) = arrPreviousWorkOrders(j, 1) Then
+        For j = 1 To UBound(arrPrevious, 1)
+            If arrLatest(i, 1) = arrPrevious(j, 1) Then
                 isFound = True
                 Exit For
             End If
         Next j
 
-        ' If the work order is not found, highlight the row in green
         If Not isFound Then
-            wsFilteredData.Cells(i + 1, datasetCORPCol.Column).Interior.Color = cBlue
+            ' i + 1 = actual row on worksheet (accounting for header)
+            ws.Cells(i + 1, currentCol.Column).Interior.Color = highlightColor
+        End If
+    Next i
+End Sub
+
+' For STEP 8
+Sub AppendMissingWorkUnits(ws As Worksheet, arrPrevious As Variant, arrLatest As Variant, summaryEndRow As Long)
+    Dim missingValues() As Variant
+    Dim missingCount As Long
+    Dim i As Long, j As Long
+    Dim foundMissing As Boolean
+    Dim startRow As Long
+
+    missingCount = 0
+
+    ' Compare each entry in previous against latest
+    For i = 1 To UBound(arrPrevious, 1)
+        foundMissing = True
+
+        For j = 1 To UBound(arrLatest, 1)
+            If arrPrevious(i, 1) = arrLatest(j, 1) Then
+                foundMissing = False
+                Exit For
+            End If
+        Next j
+
+        If foundMissing Then
+            missingCount = missingCount + 1
+            ReDim Preserve missingValues(1 To missingCount)
+            missingValues(missingCount) = arrPrevious(i, 1)
         End If
     Next i
 
-    ' /*
-' STEP 8: IDENTIFY MISSING VALUES AND APPEND TO SUMMARY
-' */
+    ' Output missing values
+    If missingCount > 0 Then
+        startRow = summaryEndRow + 2
 
-Dim missingValues() As Variant
-Dim missingCount As Long
-Dim missingStartRow As Long
-Dim missingValue As Variant
-Dim index As Long
-Dim foundMissing As Boolean
+        ws.Cells(startRow, 1).Value = "ENCLOSED WORK_UNIT_CDs"
 
-' Initialize variables for the missing values list
-missingCount = 0
+        For i = 1 To missingCount
+            ws.Cells(startRow + i, 1).Value = "'" & missingValues(i)
+        Next i
 
-' Loop through each entry in the previous dataset to find missing values
-For i = 1 To UBound(arrPreviousWorkOrders, 1)
-    foundMissing = True
-
-    ' Compare each previous work order against the latest dataset
-    For j = 1 To UBound(arrLatestWorkOrders, 1)
-        If arrPreviousWorkOrders(i, 1) = arrLatestWorkOrders(j, 1) Then
-            foundMissing = False
-            Exit For
-        End If
-    Next j
-
-    ' If the work order from the previous dataset is not found in the latest dataset, it is missing
-    If foundMissing Then
-        missingCount = missingCount + 1
-        ReDim Preserve missingValues(1 To missingCount)
-        missingValues(missingCount) = arrPreviousWorkOrders(i, 1)
+        ' Format the range
+        With ws.Range(ws.Cells(startRow, 1), ws.Cells(startRow + missingCount, 1))
+            .Font.Bold = True
+            .Font.Italic = True
+            .HorizontalAlignment = xlLeft
+            .Borders.LineStyle = xlContinuous
+            .Borders.Color = vbBlack
+        End With
     End If
-Next i
-
-' If there are missing values, append them below the summary
-If missingCount > 0 Then
-    ' Determine the start row for appending missing values
-    missingStartRow = summaryEndRow + 2
-
-    ' Write the header for the missing values
-    wsFilteredData.Cells(missingStartRow, 1).Value = "ENCLOSED WORK_UNIT_CDs"
-    
-    ' Write the missing values below the header
-    For index = 1 To missingCount
-        wsFilteredData.Cells(missingStartRow + index, 1).Value = "'" & missingValues(index)
-    Next index
-
-    ' Apply formatting to the missing values section
-    With wsFilteredData
-        .Range(.Cells(missingStartRow, 1), .Cells(missingStartRow + missingCount, 1)).Font.Bold = True
-        .Range(.Cells(missingStartRow, 1), .Cells(missingStartRow + missingCount, 1)).Font.Italic = True
-        .Range(.Cells(missingStartRow, 1), .Cells(missingStartRow + missingCount, 1)).HorizontalAlignment = xlLeft
-        .Range(.Cells(missingStartRow, 1), .Cells(missingStartRow + missingCount, 1)).Borders.LineStyle = xlContinuous
-        .Range(.Cells(missingStartRow, 1), .Cells(missingStartRow + missingCount, 1)).Borders.Color = vbBlack
-    End With
-End If
-
-' /*
-' SIDE (non-essential) STEP: DELETE `previous` WORKSHEET AS WE WILL NO LONGER BE NEEDING IT.
-' */
-    On Error Resume Next
-    Application.DisplayAlerts = False
-    ThisWorkbook.Sheets("previous").Delete
-    Application.DisplayAlerts = True
-    On Error GoTo 0
-    
-    MsgBox "The script has run successfully!!", vbInformation
-
 End Sub
+' === Supporting Functions Of FilterDataAndCreateSummary() [END] ===
