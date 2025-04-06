@@ -1,100 +1,94 @@
+'=======================
+'   Module: MergeTool
+'=======================
+
 Sub MergeMySheets()
-    Dim wsSource As Worksheet, wsTarget As Worksheet
-    Dim lastRow As Long, targetRow As Long
-    Dim wb As Workbook, ColCnt As Long
-    Dim sheetNames As Variant, srcRng As Range
+    Dim wsTarget As Worksheet
+    Dim wb As Workbook
+    Dim sheetNames As Variant
     Dim i As Integer
-    
-    ' Define the sheet names to copy from
-    sheetNames = Array("s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8") ' Update as needed
-    
-    ' Create a new worksheet for the filtered data
+    Dim targetRow As Long
+    Dim firstSheet As Boolean
+
+    sheetNames = Array("s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8")
     Set wb = ThisWorkbook
+    Set wsTarget = GetOrCreateSheet(wb, "special")
     
-    ' Check if the sheet exists before proceeding
+    targetRow = 1
+    firstSheet = True
+
+    For i = LBound(sheetNames) To UBound(sheetNames)
+        If SheetExists(sheetNames(i)) Then
+            Call CopySheetData(wb.Sheets(sheetNames(i)), wsTarget, targetRow, firstSheet)
+            If firstSheet Then firstSheet = False
+            targetRow = wsTarget.Cells(wsTarget.Rows.Count, 1).End(xlUp).Row + 1
+        Else
+            Debug.Print "Sheet not found: " & sheetNames(i)
+        End If
+    Next i
+
+    Call FilterDataAndCreateSummary
+End Sub
+
+' === Supporting Functions Of MergeMySheets() [START] ===
+Function GetOrCreateSheet(wb As Workbook, sheetName As String) As Worksheet
     On Error Resume Next
-    Set wsTarget = wb.Sheets("special")
-    On Error GoTo 0 ' Reset error handling
-    If Not wsTarget Is Nothing Then
-        ' Clear existing data in target sheet
-        wsTarget.Cells.Clear
+    Set GetOrCreateSheet = wb.Sheets(sheetName)
+    On Error GoTo 0
+    
+    If Not GetOrCreateSheet Is Nothing Then
+        GetOrCreateSheet.Cells.Clear
     Else
-        Set wsTarget = wb.Sheets.Add
-        wsTarget.Name = "special" ' Change as needed
+        Set GetOrCreateSheet = wb.Sheets.Add
+        GetOrCreateSheet.Name = sheetName
+    End If
+End Function
+
+Sub CopySheetData(wsSource As Worksheet, wsTarget As Worksheet, ByRef targetRow As Long, isFirstSheet As Boolean)
+    Dim lastRow As Long, colCount As Long
+    Dim srcRng As Range
+    Dim colNum As Long, j As Long
+    Dim colData As Variant
+
+    lastRow = wsSource.Cells(wsSource.Rows.Count, 1).End(xlUp).Row
+    colCount = wsSource.UsedRange.Columns.Count
+    
+    If lastRow = 0 Then Exit Sub ' No data to copy
+    
+    If isFirstSheet Then
+        Set srcRng = wsSource.Range("A1", wsSource.Cells(lastRow, colCount))
+    ElseIf lastRow > 1 Then
+        Set srcRng = wsSource.Range("A2", wsSource.Cells(lastRow, colCount))
     End If
     
-    targetRow = 1 ' Start pasting from the first row
-    Dim firstSheet As Boolean: firstSheet = True ' Flag to track the first sheet
-    
-    ' Loop through the defined sheet names
-    For i = LBound(sheetNames) To UBound(sheetNames)
-        ' Check if the sheet exists before proceeding
-        On Error Resume Next
-        Set wsSource = wb.Sheets(sheetNames(i))
-        On Error GoTo 0 ' Reset error handling
-        
-        ' If the sheet does not exist, skip it
-        If Not wsSource Is Nothing Then
-            ' Find last used row in source sheet
-            lastRow = wsSource.Cells(wsSource.Rows.Count, 1).End(xlUp).Row
-            ColCnt = wsSource.UsedRange.Columns.Count
-            ' Only copy if the sheet contains data
-            If lastRow > 0 Then
-                If firstSheet Then
-                    ' First sheet: Copy everything (including headers)
-                    Set srcRng = wsSource.Range("A1", wsSource.Cells(lastRow, ColCnt))
-                    firstSheet = False ' Mark that we've processed the first sheet
-                Else
-                    ' Other sheets: Exclude the header (start from row 2)
-                    If lastRow > 1 Then
-                        Set srcRng = wsSource.Range("A2", wsSource.Cells(lastRow, ColCnt))
-                    Else
-                        ' If only header exists, skip this sheet
-                    End If
-                End If
-                
-                If Not srcRng Is Nothing Then
-                    ' Before pasting, force the WORK_UNIT_CD column to text format in wsTarget
-                    Dim colNum As Long
-                    colNum = Application.Match("WORK_UNIT_CD", wsSource.Rows(1), 0) ' Find the WORK_UNIT_CD column
-                    If Not IsError(colNum) Then
-                        ' Convert the WORK_UNIT_CD column to text in the target sheet
-                        wsTarget.Columns(colNum).NumberFormat = "@"
-                    End If
-                    
-                    ' Copy data from source to target
-                    With srcRng
-                        ' Paste values into target sheet
-                        wsTarget.Cells(targetRow, 1).Resize(.Rows.Count, .Columns.Count).Value = .Value
-                    End With
+    If srcRng Is Nothing Then Exit Sub
 
-                    ' After copying, force the WORK_UNIT_CD column to text format again (in case it got changed)
-                    If Not IsError(colNum) Then
-                        wsTarget.Columns(colNum).NumberFormat = "@"
-                        ' Loop through the WORK_UNIT_CD column and prepend apostrophe if numeric
-                        Dim colData As Variant
-                        colData = wsTarget.Range(wsTarget.Cells(targetRow + 1, colNum), wsTarget.Cells(targetRow + srcRng.Rows.Count, colNum)).Value
-                        Dim j As Long
-                        For j = 1 To UBound(colData, 1)
-                            If IsNumeric(colData(j, 1)) Then
-                                colData(j, 1) = "'" & colData(j, 1) ' Prepend apostrophe
-                            End If
-                        Next j
-                        ' Paste the modified data back into the target sheet
-                        wsTarget.Range(wsTarget.Cells(targetRow + 1, colNum), wsTarget.Cells(targetRow + srcRng.Rows.Count, colNum)).Value = colData
-                    End If
-                End If
-                ' Update next target row
-                targetRow = wsTarget.Cells(wsTarget.Rows.Count, 1).End(xlUp).Row + 1
-            End If
-        End If
-        
-        ' Reset wsSource for the next loop
-        Set wsSource = Nothing
-        Set srcRng = Nothing
-    Next i
+    colNum = Application.Match("WORK_UNIT_CD", wsSource.Rows(1), 0)
     
-    ' Call the primary script on the merged data
-    Call FilterDataAndCreateSummary
-    
+    If Not IsError(colNum) Then
+        wsTarget.Columns(colNum).NumberFormat = "@"
+    End If
+
+    wsTarget.Cells(targetRow, 1).Resize(srcRng.Rows.Count, srcRng.Columns.Count).Value = srcRng.Value
+
+    If Not IsError(colNum) Then
+        Call FormatWorkUnitColumn(wsTarget, colNum, targetRow + 1, targetRow + srcRng.Rows.Count - 1)
+    End If
 End Sub
+
+Sub FormatWorkUnitColumn(ws As Worksheet, colNum As Long, startRow As Long, endRow As Long)
+    Dim colData As Variant
+    Dim i As Long
+
+    ws.Columns(colNum).NumberFormat = "@"
+    colData = ws.Range(ws.Cells(startRow, colNum), ws.Cells(endRow, colNum)).Value
+
+    For i = 1 To UBound(colData, 1)
+        If IsNumeric(colData(i, 1)) Then
+            colData(i, 1) = "'" & colData(i, 1)
+        End If
+    Next i
+
+    ws.Range(ws.Cells(startRow, colNum), ws.Cells(endRow, colNum)).Value = colData
+End Sub
+' === Supporting Functions Of MergeMySheets() [END] ===
