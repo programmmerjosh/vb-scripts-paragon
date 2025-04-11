@@ -21,7 +21,7 @@ Sub MergeMySheets()
         If SheetExists(sheetNames(i)) Then
             Call CopySheetData(wb.Sheets(sheetNames(i)), wsTarget, targetRow, firstSheet)
             If firstSheet Then firstSheet = False
-            targetRow = wsTarget.Cells(wsTarget.Rows.Count, 1).End(xlUp).Row + 1
+            targetRow = wsTarget.Cells(wsTarget.Rows.count, 1).End(xlUp).Row + 1
         Else
             Debug.Print "Sheet not found: " & sheetNames(i)
         End If
@@ -50,8 +50,8 @@ Sub CopySheetData(wsSource As Worksheet, wsTarget As Worksheet, ByRef targetRow 
     Dim colNum As Long, j As Long
     Dim colData As Variant
 
-    lastRow = wsSource.Cells(wsSource.Rows.Count, 1).End(xlUp).Row
-    colCount = wsSource.UsedRange.Columns.Count
+    lastRow = wsSource.Cells(wsSource.Rows.count, 1).End(xlUp).Row
+    colCount = wsSource.UsedRange.Columns.count
     
     If lastRow = 0 Then Exit Sub ' No data to copy
     
@@ -69,26 +69,17 @@ Sub CopySheetData(wsSource As Worksheet, wsTarget As Worksheet, ByRef targetRow 
         wsTarget.Columns(colNum).NumberFormat = "@"
     End If
 
-    wsTarget.Cells(targetRow, 1).Resize(srcRng.Rows.Count, srcRng.Columns.Count).Value = srcRng.Value
+    wsTarget.Cells(targetRow, 1).Resize(srcRng.Rows.count, srcRng.Columns.count).Value = srcRng.Value
 
     If Not IsError(colNum) Then
-        Call FormatWorkUnitColumn(wsTarget, colNum, targetRow + 1, targetRow + srcRng.Rows.Count - 1)
+        Call FormatWorkUnitColumn(wsTarget, colNum, targetRow + 1, targetRow + srcRng.Rows.count - 1)
     End If
 End Sub
 
-Sub FormatWorkUnitColumn(ws As Worksheet, colNum As Long, startRow As Long, endRow As Long)
-    Dim colData As Variant
-    Dim i As Long
-
-    ws.Columns(colNum).NumberFormat = "@"
-    colData = ws.Range(ws.Cells(startRow, colNum), ws.Cells(endRow, colNum)).Value
-
-    For i = 1 To UBound(colData, 1)
-        If IsNumeric(colData(i, 1)) Then
-            colData(i, 1) = "'" & colData(i, 1)
-        End If
-    Next i
-
-    ws.Range(ws.Cells(startRow, colNum), ws.Cells(endRow, colNum)).Value = colData
+Sub FormatWorkUnitColumn(ws As Worksheet, startRow As Long, endRow As Long, colNum As Long)
+    With ws.Range(ws.Cells(startRow, colNum), ws.Cells(endRow, colNum))
+        .NumberFormat = "@" ' Set format to text
+        .Value = .Value     ' Force Excel to re-evaluate the values as text
+    End With
 End Sub
 ' === Supporting Functions Of MergeMySheets() [END] ===

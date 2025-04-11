@@ -1,10 +1,12 @@
+' Working refactored version -> CURRENTLY IN TEST PHASE
+
 Sub FilterDataAndCreateSummary()
     ' Define constants
     Dim cYellow As Long
-    Dim cPink As Long 
-    Dim cRed As Long 
+    Dim cPink As Long
+    Dim cRed As Long
     Dim cOrange As Long
-    Dim cBlue As Long 
+    Dim cBlue As Long
 
     ' Set constants
     cYellow = RGB(255, 255, 0)
@@ -37,7 +39,7 @@ Sub FilterDataAndCreateSummary()
     ' */
 
     Dim wsOutersKey As Worksheet
-    Dim datasetCORPCol As Range, planTypeCol As Range, outerCol As Range
+    Dim datasetCORPCol As Range, planTypeCol As Range, outerCol As Range, workOrderCol As Range
     Dim sortedOuters() As Collection
     Dim lastRowDataset As Long
 
@@ -49,6 +51,7 @@ Sub FilterDataAndCreateSummary()
     If Not ValidateRequiredColumns(wsOutersKey, Array("CORP_CD", "C5_OUTER", "C4_OUTER", "DL_OUTER")) Then Exit Sub
 
     Set datasetCORPCol = wsFilteredData.Rows(1).Find("CORP_CD")
+    Set workOrderCol = wsFilteredData.Rows(1).Find("WORK_UNIT_CD")
     Set planTypeCol = wsFilteredData.Rows(1).Find("PLAN_TYPE_CD")
     Set outerCol = GetOrCreateColumn(wsFilteredData, "OUTER")
 
@@ -60,7 +63,7 @@ Sub FilterDataAndCreateSummary()
     ' Side STEP: HIGHLIGHT OUTERS WE ALWAYS NEED TO ORDER (even when they have zero inserts)
     ' */
 
-    Call HighlightAlwaysOrderedOuters(wsFilteredData, outerCol.Column, datasetCORPCol.Column)
+    Call HighlightAlwaysOrderedOuters(wsFilteredData, outerCol.Column, workOrderCol.Column)
     Call FormatFilteredDataSheet(wsFilteredData, lastRowDataset)
 
     ' /*
@@ -111,7 +114,7 @@ Sub FilterDataAndCreateSummary()
     Call AddTimestampToHeader(wsFilteredData)
 
     ' /*
-    ' STEP 7: HIGHLIGHT NEW ENTRIES (which will only execute if the 'previous' worksheet exists) 
+    ' STEP 7: HIGHLIGHT NEW ENTRIES (which will only execute if the 'previous' worksheet exists)
     ' */
     Dim arrLatestWorkOrders As Variant, arrPreviousWorkOrders As Variant
     Dim wsPreviousFilteredData As Worksheet
@@ -132,7 +135,7 @@ Sub FilterDataAndCreateSummary()
         arrLatestWorkOrders = GetWorkUnitArray(wsFilteredData, "WORK_UNIT_CD", lastRowDataset)
         arrPreviousWorkOrders = GetWorkUnitArray(wsPreviousFilteredData, "WORK_UNIT_CD", lastRowPreviousDataset)
 
-        Call HighlightNewWorkOrders(wsFilteredData, arrPreviousWorkOrders, arrLatestWorkOrders, "WORK_UNIT_CD", cBlue)
+        Call HighlightNewWorkOrders(wsFilteredData, arrPreviousWorkOrders, arrLatestWorkOrders, "CORP_CD", cBlue)
     Else
         MsgBox "The script has run successfully!!", vbInformation
         MsgBox "Important Note: `previous` worksheet is missing. Rename `FilteredData` to `previous` before you run this script again to see the new entries.", vbInformation
@@ -193,7 +196,7 @@ Sub CopyColumnsByHeader(wsSource As Worksheet, wsTarget As Worksheet, columnName
     targetCol = 1
 
     For Each colName In columnNames
-        For i = 1 To headers.Columns.Count
+        For i = 1 To headers.Columns.count
             If wsSource.Cells(1, i).Value = colName Then
                 wsSource.Columns(i).Copy Destination:=wsTarget.Cells(1, targetCol)
                 targetCol = targetCol + 1
@@ -214,10 +217,10 @@ Sub SortByColumn(ws As Worksheet, columnHeader As String)
         Exit Sub
     End If
 
-    lastRow = ws.Cells(ws.Rows.Count, col.Column).End(xlUp).Row
+    lastRow = ws.Cells(ws.Rows.count, col.Column).End(xlUp).Row
 
     ws.Sort.SortFields.Clear
-    ws.Sort.SortFields.Add Key:=ws.Columns(col.Column), Order:=xlAscending
+    ws.Sort.SortFields.Add key:=ws.Columns(col.Column), Order:=xlAscending
 
     With ws.Sort
         .SetRange ws.UsedRange
@@ -235,7 +238,7 @@ Function GetOrCreateColumn(ws As Worksheet, headerName As String) As Range
     
     If col Is Nothing Then
         Dim lastCol As Long
-        lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column + 1
+        lastCol = ws.Cells(1, ws.Columns.count).End(xlToLeft).Column + 1
         ws.Cells(1, lastCol).Value = headerName
         Set GetOrCreateColumn = ws.Cells(1, lastCol)
     Else
@@ -251,7 +254,7 @@ Function GetLastRowBeforeBlanks(ws As Worksheet, colIndex As Long, Optional star
 
     ' Load the column into an array (from startRow to the bottom of the worksheet)
     With ws
-        dataCol = .Range(.Cells(startRow, colIndex), .Cells(.Rows.Count, colIndex)).Value
+        dataCol = .Range(.Cells(startRow, colIndex), .Cells(.Rows.count, colIndex)).Value
     End With
 
     ' Scan until we find two consecutive blanks
@@ -295,7 +298,7 @@ Function BuildOuterLookup(ws As Worksheet, corpColName As String) As Collection(
     Set c4Col = ws.Rows(1).Find("C4_OUTER")
     Set dlCol = ws.Rows(1).Find("DL_OUTER")
 
-    lastRow = ws.Cells(ws.Rows.Count, corpCol.Column).End(xlUp).Row
+    lastRow = ws.Cells(ws.Rows.count, corpCol.Column).End(xlUp).Row
     For matchLength = 1 To 6
         Set sortedOuters(matchLength) = New Collection
     Next matchLength
@@ -321,7 +324,7 @@ Sub MapOutersToDataset(ws As Worksheet, corpCol As Long, planCol As Long, outerC
     Dim corpVal As String, planVal As String, mappedOuter As String
     Dim entry As Variant
 
-    lastRow = ws.Cells(ws.Rows.Count, corpCol).End(xlUp).Row
+    lastRow = ws.Cells(ws.Rows.count, corpCol).End(xlUp).Row
 
     For i = 2 To lastRow
         corpVal = Trim(ws.Cells(i, corpCol).Value)
@@ -350,7 +353,7 @@ Sub MapOutersToDataset(ws As Worksheet, corpCol As Long, planCol As Long, outerC
 End Sub
 
 ' For SIDE STEP between 2 & 3 (1 of 2)
-Sub HighlightAlwaysOrderedOuters(ws As Worksheet, outerColIndex As Long, workUnitColIndex As Long)
+Sub HighlightAlwaysOrderedOuters(ws As Worksheet, outerColIndex As Long, colNumToHighlight As Long)
     Dim i As Long, lastRow As Long
     Dim myOuter As String
     Dim outersToOrder As Variant
@@ -358,13 +361,13 @@ Sub HighlightAlwaysOrderedOuters(ws As Worksheet, outerColIndex As Long, workUni
 
     outersToOrder = Array("50023", "BCY03", "BCORPC5AIR", "BARCLPC52", "GCRPC524TNT", "EOP39TNT", "BSMTNT")
 
-    lastRow = ws.Cells(ws.Rows.Count, outerColIndex).End(xlUp).Row
+    lastRow = ws.Cells(ws.Rows.count, colNumToHighlight).End(xlUp).Row
 
     For i = 2 To lastRow
         myOuter = ws.Cells(i, outerColIndex).Value
         For count = LBound(outersToOrder) To UBound(outersToOrder)
             If StrComp(outersToOrder(count), myOuter, vbTextCompare) = 0 Then
-                ws.Cells(i, workUnitColIndex).Interior.Color = RGB(255, 171, 96) ' cOrange
+                ws.Cells(i, colNumToHighlight).Interior.Color = cOrange
                 Exit For
             End If
         Next count
@@ -415,7 +418,7 @@ Sub HighlightHighInsertCounts(ws As Worksheet, workUnitColName As String, insert
         Exit Sub
     End If
 
-    lastRow = ws.Cells(ws.Rows.Count, insertCol.Column).End(xlUp).Row
+    lastRow = ws.Cells(ws.Rows.count, insertCol.Column).End(xlUp).Row
 
     For i = 2 To lastRow
         insertValue = ws.Cells(i, insertCol.Column).Value
@@ -438,8 +441,8 @@ Sub HighlightRemakes(ws As Worksheet, remColName As String, highlightColor As Lo
         Exit Sub
     End If
 
-    lastRow = ws.Cells(ws.Rows.Count, remCol.Column).End(xlUp).Row
-    lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
+    lastRow = ws.Cells(ws.Rows.count, remCol.Column).End(xlUp).Row
+    lastCol = ws.Cells(1, ws.Columns.count).End(xlToLeft).Column
 
     For i = 2 To lastRow
         If Trim(ws.Cells(i, remCol.Column).Value) <> "" Then
@@ -454,7 +457,7 @@ Sub AddColorKey(ws As Worksheet, startCol As Long, mergeCols As Long, keyDescrip
     Dim i As Long
 
     ' Find first empty row after data
-    startRow = ws.Cells(ws.Rows.Count, startCol).End(xlUp).Row + 4
+    startRow = ws.Cells(ws.Rows.count, startCol).End(xlUp).Row + 4
     headingRow = startRow - 1
 
     ' Add heading row
@@ -477,7 +480,7 @@ Sub AddColorKey(ws As Worksheet, startCol As Long, mergeCols As Long, keyDescrip
     Next i
 
     ' Apply borders to heading and key
-    endRow = ws.Cells(ws.Rows.Count, startCol).End(xlUp).Row
+    endRow = ws.Cells(ws.Rows.count, startCol).End(xlUp).Row
     For i = headingRow To endRow
         With ws.Range(ws.Cells(i, startCol), ws.Cells(i, startCol + mergeCols - 1)).Borders
             .LineStyle = xlContinuous
@@ -506,7 +509,7 @@ Function GenerateOuterSummary(wsData As Worksheet, wsOutersKey As Worksheet, las
         Exit Function
     End If
 
-    lastRowKey = wsOutersKey.Cells(wsOutersKey.Rows.Count, 1).End(xlUp).Row
+    lastRowKey = wsOutersKey.Cells(wsOutersKey.Rows.count, 1).End(xlUp).Row
 
     ReDim outerArray(1 To 1)
     ReDim sumArray(1 To 1)
@@ -606,7 +609,7 @@ Sub SortSummary(ws As Worksheet, startRow As Long, endRow As Long)
 
     With ws.Sort
         .SortFields.Clear
-        .SortFields.Add Key:=ws.Columns(1), Order:=xlAscending
+        .SortFields.Add key:=ws.Columns(1), Order:=xlAscending
         .SetRange sortRange
         .Header = xlYes
         .MatchCase = False
@@ -624,6 +627,11 @@ Sub FormatSummaryTable(ws As Worksheet, startRow As Long, endRow As Long)
     With ws.Range(ws.Cells(startRow, 1), ws.Cells(startRow, summaryLastCol))
         .Font.Bold = True
         .Font.Italic = True
+    End With
+    
+    With ws
+        ' Align column A (column 1)
+        .Columns(1).HorizontalAlignment = xlLeft
     End With
 
     ' Format number column (SUM)
@@ -694,7 +702,7 @@ Function GetWorkUnitArray(ws As Worksheet, colName As String, Optional lastRowLi
     If lastRowLimit > 0 Then
         lastRow = lastRowLimit
     Else
-        lastRow = ws.Cells(ws.Rows.Count, colRef.Column).End(xlUp).Row
+        lastRow = ws.Cells(ws.Rows.count, colRef.Column).End(xlUp).Row
     End If
 
     GetWorkUnitArray = ws.Range(ws.Cells(2, colRef.Column), ws.Cells(lastRow, colRef.Column)).Value
@@ -763,7 +771,7 @@ Sub AppendMissingWorkUnits(ws As Worksheet, arrPrevious As Variant, arrLatest As
     If missingCount > 0 Then
         startRow = summaryEndRow + 2
 
-        ws.Cells(startRow, 1).Value = "ENCLOSED WORK_UNIT_CDs"
+        ws.Cells(startRow, 1).Value = "ENCLOSED WORK ORDERS"
 
         For i = 1 To missingCount
             ws.Cells(startRow + i, 1).Value = "'" & missingValues(i)
