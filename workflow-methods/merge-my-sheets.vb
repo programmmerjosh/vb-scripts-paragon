@@ -9,6 +9,7 @@ Sub MergeMySheets()
     Dim i As Integer
     Dim targetRow As Long
     Dim firstSheet As Boolean
+    Dim anySheet As Boolean
 
     sheetNames = Array("s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8")
     Set wb = ThisWorkbook
@@ -16,9 +17,11 @@ Sub MergeMySheets()
     
     targetRow = 1
     firstSheet = True
+    anySheet = False
 
     For i = LBound(sheetNames) To UBound(sheetNames)
         If SheetExists(sheetNames(i)) Then
+            anySheet = True
             Call CopySheetData(wb.Sheets(sheetNames(i)), wsTarget, targetRow, firstSheet)
             If firstSheet Then firstSheet = False
             targetRow = wsTarget.Cells(wsTarget.Rows.count, 1).End(xlUp).Row + 1
@@ -26,6 +29,12 @@ Sub MergeMySheets()
             Debug.Print "Sheet not found: " & sheetNames(i)
         End If
     Next i
+
+    If Not anySheet Then
+        MsgBox "`" & "s1" & "` worksheet is missing.", vbExclamation
+        DeleteSheetIfExists("special")
+        Exit Sub
+    End If
 
     Call FilterDataAndCreateSummary
 End Sub
