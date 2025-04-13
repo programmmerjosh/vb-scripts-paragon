@@ -695,7 +695,7 @@ Sub FormatSummaryTable(ws As Worksheet, startRow As Long, endRow As Long)
     End With
 End Sub
 
-' For SIDE STEP between 6 & 7 (1 of 2)
+' For SIDE STEP between 6 & 7 (1 of 2) & MergeMySheets()
 Sub DeleteSheetIfExists(sheetName As String)
     Dim ws As Worksheet
     On Error Resume Next
@@ -719,7 +719,7 @@ Sub AddTimestampToHeader(ws As Worksheet)
     End With
 End Sub
 
-' For STEP 7 (1 of 2)
+' For STEP 7 (1 of 2) & MergeMySheets()
 Function SheetExists(sheetName As Variant) As Boolean
     On Error Resume Next
     SheetExists = Not ThisWorkbook.Sheets(CStr(sheetName)) Is Nothing

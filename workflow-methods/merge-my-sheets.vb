@@ -20,7 +20,7 @@ Sub MergeMySheets()
     anySheet = False
 
     For i = LBound(sheetNames) To UBound(sheetNames)
-        If SheetExists(sheetNames(i)) Then
+        If SheetExists(sheetNames(i)) Then ' function declared in filter-data-and-create-summary.vb
             anySheet = True
             Call CopySheetData(wb.Sheets(sheetNames(i)), wsTarget, targetRow, firstSheet)
             If firstSheet Then firstSheet = False
@@ -32,7 +32,7 @@ Sub MergeMySheets()
 
     If Not anySheet Then
         MsgBox "`" & "s1" & "` worksheet is missing.", vbExclamation
-        DeleteSheetIfExists("special")
+        DeleteSheetIfExists("special") ' function declared in filter-data-and-create-summary.vb
         Exit Sub
     End If
 
