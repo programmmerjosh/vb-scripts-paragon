@@ -63,7 +63,7 @@ Sub FilterDataAndCreateSummary()
     ' Side STEP: HIGHLIGHT OUTERS WE ALWAYS NEED TO ORDER (even when they have zero inserts)
     ' */
 
-    Call HighlightAlwaysOrderedOuters(wsFilteredData, outerCol.Column, workOrderCol.Column)
+    Call HighlightAlwaysOrderedOuters(wsFilteredData, outerCol.Column, workOrderCol.Column, cOrange)
     Call FormatFilteredDataSheet(wsFilteredData, lastRowDataset)
 
     ' /*
@@ -360,7 +360,7 @@ Sub MapOutersToDataset(ws As Worksheet, corpCol As Long, planCol As Long, outerC
 End Sub
 
 ' For SIDE STEP between 2 & 3 (1 of 2)
-Sub HighlightAlwaysOrderedOuters(ws As Worksheet, outerColIndex As Long, colNumToHighlight As Long)
+Sub HighlightAlwaysOrderedOuters(ws As Worksheet, outerColIndex As Long, colNumToHighlight As Long, highlightColor As Variant)
     Dim i As Long, lastRow As Long
     Dim myOuter As String
     Dim outersToOrder As Variant
@@ -374,7 +374,7 @@ Sub HighlightAlwaysOrderedOuters(ws As Worksheet, outerColIndex As Long, colNumT
         myOuter = ws.Cells(i, outerColIndex).Value
         For count = LBound(outersToOrder) To UBound(outersToOrder)
             If StrComp(outersToOrder(count), myOuter, vbTextCompare) = 0 Then
-                ws.Cells(i, colNumToHighlight).Interior.Color = cOrange
+                ws.Cells(i, colNumToHighlight).Interior.Color = highlightColor
                 Exit For
             End If
         Next count
