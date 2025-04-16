@@ -63,7 +63,7 @@ Sub FilterDataAndCreateSummary()
     ' Side STEP: HIGHLIGHT OUTERS WE ALWAYS NEED TO ORDER (even when they have zero inserts)
     ' */
 
-    Call HighlightAlwaysOrderedOuters(wsFilteredData, outerCol.Column, workOrderCol.Column)
+    Call HighlightAlwaysOrderedOuters(wsFilteredData, outerCol.Column, workOrderCol.Column, cOrange)
     Call FormatFilteredDataSheet(wsFilteredData, lastRowDataset)
 
     ' /*
@@ -92,14 +92,21 @@ Sub FilterDataAndCreateSummary()
     ' */
     Dim summaryStartRow As Long
     Dim summaryEndRow As Long
+    Dim summaryData As Variant
 
-    summaryStartRow = lastRowDataset + 14
     summaryData = GenerateOuterSummary(wsFilteredData, wsOutersKey, lastRowDataset)
-    summaryEndRow = summaryStartRow + UBound(summaryData, 2)
 
-    Call WriteSummaryTable(wsFilteredData, summaryData, summaryStartRow)
-    Call SortSummary(wsFilteredData, summaryStartRow, summaryEndRow)
-    Call FormatSummaryTable(wsFilteredData, summaryStartRow, summaryEndRow)
+    If Is2DArrayEmpty(summaryData) Then
+        wsFilteredData.Cells(lastRowDataset + 14, 1).Value = "No summary data available due to no mapped outers"
+        wsFilteredData.Columns(8).delete ' delete column 8 (which is the outers column) because we have no mapped outers in this case
+    Else
+        summaryStartRow = lastRowDataset + 14
+        summaryEndRow = summaryStartRow + UBound(summaryData, 2)
+    
+        Call WriteSummaryTable(wsFilteredData, summaryData, summaryStartRow)
+        Call SortSummary(wsFilteredData, summaryStartRow, summaryEndRow)
+        Call FormatSummaryTable(wsFilteredData, summaryStartRow, summaryEndRow)
+    End If
 
     ' /*
     ' SIDE (non-essential) STEP: DELETE special WORKSHEET AS WE WILL NO LONGER BE NEEDING IT.
@@ -353,7 +360,7 @@ Sub MapOutersToDataset(ws As Worksheet, corpCol As Long, planCol As Long, outerC
 End Sub
 
 ' For SIDE STEP between 2 & 3 (1 of 2)
-Sub HighlightAlwaysOrderedOuters(ws As Worksheet, outerColIndex As Long, colNumToHighlight As Long)
+Sub HighlightAlwaysOrderedOuters(ws As Worksheet, outerColIndex As Long, colNumToHighlight As Long, highlightColor As Variant)
     Dim i As Long, lastRow As Long
     Dim myOuter As String
     Dim outersToOrder As Variant
@@ -367,7 +374,7 @@ Sub HighlightAlwaysOrderedOuters(ws As Worksheet, outerColIndex As Long, colNumT
         myOuter = ws.Cells(i, outerColIndex).Value
         For count = LBound(outersToOrder) To UBound(outersToOrder)
             If StrComp(outersToOrder(count), myOuter, vbTextCompare) = 0 Then
-                ws.Cells(i, colNumToHighlight).Interior.Color = cOrange
+                ws.Cells(i, colNumToHighlight).Interior.Color = highlightColor
                 Exit For
             End If
         Next count
@@ -490,101 +497,132 @@ Sub AddColorKey(ws As Worksheet, startCol As Long, mergeCols As Long, keyDescrip
     Next i
 End Sub
 
-' For STEP 6 (1 of 4)
-Function GenerateOuterSummary(wsData As Worksheet, wsOutersKey As Worksheet, lastRowDataset As Long) As Variant
-    Dim stmtCol As Range, remCol As Range, planCol As Range, outerCol As Range
-    Dim outerArray() As String, sumArray() As Double, stockArray() As String
-    Dim i As Long, idx As Long
-    Dim found As Boolean, stmtVal As Double, remVal As Variant
-    Dim planVal As String, outerVal As String, stockLoc As String
-    Dim lastRowKey As Long
+' For STEP 6 (1 of 5)
+Function Is2DArrayEmpty(arr As Variant) As Boolean
+    On Error GoTo ErrHandler
+    If IsArray(arr) Then
+        If Not IsEmpty(arr) Then
+            Dim r1 As Long, r2 As Long
+            r1 = UBound(arr, 1)
+            r2 = UBound(arr, 2)
+            Is2DArrayEmpty = False
+            Exit Function
+        End If
+    End If
+ErrHandler:
+    Is2DArrayEmpty = True
+End Function
 
-    Set outerCol = wsData.Rows(1).Find("OUTER")
-    Set stmtCol = wsData.Rows(1).Find("STMT_CNT")
-    Set remCol = wsData.Rows(1).Find("REM_MC_CNT")
-    Set planCol = wsData.Rows(1).Find("PLAN_TYPE_CD")
+' For STEP 6 (2 of 5)
+Function GenerateOuterSummary(wsFilteredData As Worksheet, wsOutersKey As Worksheet, lastRowDataset As Long) As Variant
+    Dim outerArray() As Variant, stmtSumArray() As Double, stockArray() As Variant
+    Dim outerValue As String, stmtValue As Double, remMCValue As Variant, planTypeValue As String
+    Dim stmtCNCol As Range, remMCCol As Range, planTypeCol As Range, outerCol As Range
+    Dim summaryData As Variant
+    Dim i As Long, idx As Long, lastRowOutersKey As Long
+    Dim stockLocation As String
+    Dim foundOuter As Boolean
 
-    If outerCol Is Nothing Or stmtCol Is Nothing Or remCol Is Nothing Or planCol Is Nothing Then
-        MsgBox "Missing required columns in filtered data.", vbExclamation
+    ' Find columns
+    Set outerCol = wsFilteredData.Rows(1).Find("OUTER")
+    Set stmtCNCol = wsFilteredData.Rows(1).Find("STMT_CNT")
+    Set remMCCol = wsFilteredData.Rows(1).Find("REM_MC_CNT")
+    Set planTypeCol = wsFilteredData.Rows(1).Find("PLAN_TYPE_CD")
+
+    If outerCol Is Nothing Or stmtCNCol Is Nothing Or remMCCol Is Nothing Or planTypeCol Is Nothing Then
+        MsgBox "Required columns for summary not found!", vbExclamation
         Exit Function
     End If
 
-    lastRowKey = wsOutersKey.Cells(wsOutersKey.Rows.count, 1).End(xlUp).Row
+    lastRowOutersKey = wsOutersKey.Cells(wsOutersKey.Rows.count, 1).End(xlUp).Row
 
+    ' Initialize arrays
     ReDim outerArray(1 To 1)
-    ReDim sumArray(1 To 1)
+    ReDim stmtSumArray(1 To 1)
     ReDim stockArray(1 To 1)
 
-    For i = 2 To lastRowDataset
-        outerVal = wsData.Cells(i, outerCol.Column).Value
-        stmtVal = wsData.Cells(i, stmtCol.Column).Value
-        remVal = wsData.Cells(i, remCol.Column).Value
-        planVal = wsData.Cells(i, planCol.Column).Value
+    idx = 0
 
-        If Not IsEmpty(remVal) And IsNumeric(remVal) Then
-            stmtVal = remVal
+    For i = 2 To lastRowDataset
+        outerValue = Trim(wsFilteredData.Cells(i, outerCol.Column).Value)
+        planTypeValue = Trim(wsFilteredData.Cells(i, planTypeCol.Column).Value)
+        stmtValue = wsFilteredData.Cells(i, stmtCNCol.Column).Value
+        remMCValue = wsFilteredData.Cells(i, remMCCol.Column).Value
+
+        ' Use REM_MC_CNT if it exists
+        If Not IsEmpty(remMCValue) And IsNumeric(remMCValue) Then
+            stmtValue = remMCValue
         End If
 
-        If outerVal <> "" Then
-            found = False
-            For idx = 1 To UBound(outerArray)
-                If outerArray(idx) = outerVal Then
-                    sumArray(idx) = sumArray(idx) + stmtVal
-                    found = True
+        If outerValue <> "" Then
+            foundOuter = False
+
+            ' Check if outer already exists in our list
+            For idxCheck = 1 To idx
+                If outerArray(idxCheck) = outerValue Then
+                    stmtSumArray(idxCheck) = stmtSumArray(idxCheck) + stmtValue
+                    foundOuter = True
                     Exit For
                 End If
-            Next idx
+            Next idxCheck
 
-            If Not found Then
-                ReDim Preserve outerArray(1 To UBound(outerArray) + 1)
-                ReDim Preserve sumArray(1 To UBound(sumArray) + 1)
-                ReDim Preserve stockArray(1 To UBound(stockArray) + 1)
+            If Not foundOuter Then
+                Dim matched As Boolean: matched = False
+                stockLocation = ""
 
-                outerArray(UBound(outerArray)) = outerVal
-                sumArray(UBound(sumArray)) = stmtVal
-                stockLoc = ""
-
-                For idx = 2 To lastRowKey
-                    If planVal = "V" Or planVal = "F" Then
-                        If wsOutersKey.Cells(idx, 3).Value = outerVal Then
-                            stockLoc = wsOutersKey.Cells(idx, 6).Value
+                ' Match in outerskey
+                For j = 2 To lastRowOutersKey
+                    If planTypeValue = "V" Or planTypeValue = "F" Then
+                        If wsOutersKey.Cells(j, 3).Value = outerValue Then
+                            stockLocation = wsOutersKey.Cells(j, 6).Value
+                            matched = True
                             Exit For
                         End If
                     Else
-                        If wsOutersKey.Cells(idx, 2).Value = outerVal Then
-                            stockLoc = wsOutersKey.Cells(idx, 5).Value
+                        If wsOutersKey.Cells(j, 2).Value = outerValue Then
+                            stockLocation = wsOutersKey.Cells(j, 5).Value
+                            matched = True
                             Exit For
-                        ElseIf wsOutersKey.Cells(idx, 4).Value = outerVal Then
-                            stockLoc = wsOutersKey.Cells(idx, 7).Value
+                        ElseIf wsOutersKey.Cells(j, 4).Value = outerValue Then
+                            stockLocation = wsOutersKey.Cells(j, 7).Value
+                            matched = True
                             Exit For
                         End If
                     End If
-                Next idx
+                Next j
 
-                stockArray(UBound(stockArray)) = stockLoc
+                If matched Then
+                    idx = idx + 1
+                    ReDim Preserve outerArray(1 To idx)
+                    ReDim Preserve stmtSumArray(1 To idx)
+                    ReDim Preserve stockArray(1 To idx)
+
+                    outerArray(idx) = outerValue
+                    stmtSumArray(idx) = stmtValue
+                    stockArray(idx) = stockLocation
+                End If
             End If
         End If
     Next i
 
-    ' Build 2D summary array
-    Dim summary() As Variant
-    Dim count As Long
-    count = 0
+    ' If no data found
+    If idx = 0 Then
+        GenerateOuterSummary = Array() ' Return empty array
+        Exit Function
+    End If
 
-    For idx = 1 To UBound(outerArray)
-        If sumArray(idx) <> 0 Then
-            count = count + 1
-            ReDim Preserve summary(1 To 3, 1 To count)
-            summary(1, count) = outerArray(idx)
-            summary(2, count) = sumArray(idx)
-            summary(3, count) = stockArray(idx)
-        End If
-    Next idx
+    ' Combine into output array
+    ReDim summaryData(1 To 3, 1 To idx)
+    For i = 1 To idx
+        summaryData(1, i) = outerArray(i)
+        summaryData(2, i) = stmtSumArray(i)
+        summaryData(3, i) = stockArray(i)
+    Next i
 
-    GenerateOuterSummary = summary
+    GenerateOuterSummary = summaryData
 End Function
 
-' For STEP 6 (2 of 4)
+' For STEP 6 (3 of 5)
 Sub WriteSummaryTable(ws As Worksheet, summaryData As Variant, startRow As Long)
     Dim i As Long, rowIdx As Long
 
@@ -602,23 +640,23 @@ Sub WriteSummaryTable(ws As Worksheet, summaryData As Variant, startRow As Long)
     Next i
 End Sub
 
-' For STEP 6 (3 of 4)
-Sub SortSummary(ws As Worksheet, startRow As Long, endRow As Long)
-    Dim sortRange As Range
-    Set sortRange = ws.Range(ws.Cells(startRow, 1), ws.Cells(endRow, 4)) ' Col A to D, unmerged
+' For STEP 6 (4 of 5)
+    Sub SortSummary(ws As Worksheet, startRow As Long, endRow As Long)
+        Dim sortRange As Range
+        Set sortRange = ws.Range(ws.Cells(startRow, 1), ws.Cells(endRow, 4)) ' Col A to D, unmerged
 
-    With ws.Sort
-        .SortFields.Clear
-        .SortFields.Add key:=ws.Columns(1), Order:=xlAscending
-        .SetRange sortRange
-        .Header = xlYes
-        .MatchCase = False
-        .Orientation = xlTopToBottom
-        .Apply
-    End With
-End Sub
+        With ws.Sort
+            .SortFields.Clear
+            .SortFields.Add key:=ws.Columns(1), Order:=xlAscending
+            .SetRange sortRange
+            .Header = xlYes
+            .MatchCase = False
+            .Orientation = xlTopToBottom
+            .Apply
+        End With
+    End Sub
 
-' For STEP 6 (4 of 4)
+' For STEP 6 (5 of 5)
 Sub FormatSummaryTable(ws As Worksheet, startRow As Long, endRow As Long)
     Dim i As Long
     Dim summaryLastCol As Long: summaryLastCol = 7 ' Merge to col G
@@ -657,7 +695,7 @@ Sub FormatSummaryTable(ws As Worksheet, startRow As Long, endRow As Long)
     End With
 End Sub
 
-' For SIDE STEP between 6 & 7 (1 of 2)
+' For SIDE STEP between 6 & 7 (1 of 2) & MergeMySheets()
 Sub DeleteSheetIfExists(sheetName As String)
     Dim ws As Worksheet
     On Error Resume Next
@@ -681,7 +719,7 @@ Sub AddTimestampToHeader(ws As Worksheet)
     End With
 End Sub
 
-' For STEP 7 (1 of 2)
+' For STEP 7 (1 of 2) & MergeMySheets()
 Function SheetExists(sheetName As Variant) As Boolean
     On Error Resume Next
     SheetExists = Not ThisWorkbook.Sheets(CStr(sheetName)) Is Nothing
