@@ -469,7 +469,8 @@ Sub FormatFilteredDataSheet(ws As Worksheet, lastRow As Long)
         .Columns("E").ColumnWidth = 7.5
         .Columns("F").ColumnWidth = 6.5
         .Columns("G").ColumnWidth = 3
-        .Columns("H").ColumnWidth = 16
+        .Columns("H").ColumnWidth = 12
+        .Columns("I").ColumnWidth = 16
 
         ' Apply number formatting with thousand separator (Columns 4, 5, 6)
         .Range(.Cells(2, 4), .Cells(lastRow, 4)).NumberFormat = "#,##0"
@@ -477,7 +478,7 @@ Sub FormatFilteredDataSheet(ws As Worksheet, lastRow As Long)
         .Range(.Cells(2, 6), .Cells(lastRow, 6)).NumberFormat = "#,##0"
 
         ' Apply borders to data
-        With .Range(.Cells(1, 1), .Cells(lastRow, 8)).Borders
+        With .Range(.Cells(1, 1), .Cells(lastRow, 10)).Borders
             .LineStyle = xlContinuous
             .Color = vbBlack
             .Weight = xlThin
@@ -1045,11 +1046,13 @@ Sub SortByClient()
 
     lastRow = GetLastRowBeforeBlanks(ws, col.Column)
 
-    ws.Sort.SortFields.Clear
-    ws.Sort.SortFields.Add Key:=ws.Columns(col.Column), Order:=xlAscending
+    Dim sortRange As Range
+    Set sortRange = ws.Range(ws.Cells(2, 1), ws.Cells(lastRow, 10)) ' Col A to I, unmerged
 
     With ws.Sort
-        .SetRange ws.UsedRange
+        .SortFields.Clear
+        .SortFields.Add Key:=ws.Columns(1), Order:=xlAscending
+        .SetRange sortRange
         .Header = xlYes
         .MatchCase = False
         .Orientation = xlTopToBottom
