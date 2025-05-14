@@ -511,7 +511,7 @@ Sub HighlightHighInsertCounts(ws As Worksheet, colToHighlight As String, insertC
 End Sub
 
 ' For STEP 4
-Sub HighlightRowForCondition(ws As Worksheet, highlightCol As String, highlightColor As Long, condition As String, forCondition As Boolean = True)
+Sub HighlightRowForCondition(ws As Worksheet, highlightCol As String, highlightColor As Long, condition As String, Optional forCondition As Boolean = True)
     Dim myCol As Range
     Dim lastRow As Long, lastCol As Long, i As Long
 
@@ -1023,3 +1023,35 @@ Sub FormatWorkUnitColumn(ws As Worksheet, startRow As Long, endRow As Long, colN
 End Sub
 ' === Supporting Functions Of MergeMySheets() [END] ===
 
+' Sort our FilteredData worksheet by client
+Sub SortByClient()
+    Dim ws As Worksheet
+    Dim col As Range
+    Dim lastRow As Long
+
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("FilteredData")
+    On Error GoTo 0
+    
+    If ws Is Nothing Then Exit Sub
+
+
+    Set col = ws.Rows(1).Find("PARENT_NM")
+    If col Is Nothing Then
+        MsgBox "Column PARENT_NM not found.", vbExclamation
+        Exit Sub
+    End If
+
+    lastRow = GetLastRowBeforeBlanks(ws, col.Column)
+
+    ws.Sort.SortFields.Clear
+    ws.Sort.SortFields.Add Key:=ws.Columns(col.Column), Order:=xlAscending
+
+    With ws.Sort
+        .SetRange ws.UsedRange
+        .Header = xlYes
+        .MatchCase = False
+        .Orientation = xlTopToBottom
+        .Apply
+    End With
+End Sub
