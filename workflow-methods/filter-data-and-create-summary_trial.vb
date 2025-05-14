@@ -74,13 +74,15 @@ Sub FilterDataAndCreateSummary()
     ' STEP 3: HIGHLIGHT WORK ORDERS AND INSERTS WHERE INSERTS > 4
     ' */
     
+    ' HighlightValuesInColForCondition
     Call HighlightHighInsertCounts(wsFilteredData, "WORK_UNIT_CD", "INSERT_CNT", 4, RGB(255, 111, 145)) ' cRed
 
     ' /*
     ' STEP 4: HIGHLIGHT REMAKES
     ' */
 
-    Call HighlightRemakes(wsFilteredData, "REM_MC_CNT", RGB(255, 255, 0)) ' cYellow
+    ' Sub HighlightRowForCondition(ws As Worksheet, highlightCol As String, highlightColor As Long, condition As String, forCondition As Boolean = True)
+    Call HighlightRowForCondition(wsFilteredData, "REM_MC_CNT", RGB(255, 255, 0), "", False) ' cYellow
 
     ' /*
     ' STEP 5: CREATE A COLOUR KEY ON FilteredData
@@ -118,7 +120,13 @@ Sub FilterDataAndCreateSummary()
 
     wsFilteredData.Columns(10).Delete ' delete (10)MAIL_ROUTE
     wsFilteredData.Columns(9).Delete ' delete (9)STD_MAIL_PROVIDER_CD
-    wsFilteredData.Columns(8).Delete ' delete (8)MST_MAIL_PROVIDER_CD ' BUT, potentially keep this one AND then add logic to highlight "R" for Royal Mail
+    ' wsFilteredData.Columns(8).Delete ' delete (8)MST_MAIL_PROVIDER_CD ' BUT, potentially keep this one AND then add logic to highlight "R" for Royal Mail
+    
+    ' Highlight Royal Mail
+    HighlightRoyalMail(wsFilteredData, "MST_MAIL_PROVIDER_CD", "R", RGB(255, 51, 51)) 
+
+    ' UPDATE COLUMN NAME
+    wsFilteredData.Cells(1, colToHighlight.Column).Value = "MAIL PROVIDER"
 
     ' /*
     ' SIDE (non-essential) STEP: DELETE special WORKSHEET AS WE WILL NO LONGER BE NEEDING IT.
@@ -477,16 +485,16 @@ Sub FormatFilteredDataSheet(ws As Worksheet, lastRow As Long)
 End Sub
 
 ' For STEP 3
-Sub HighlightHighInsertCounts(ws As Worksheet, workUnitColName As String, insertColName As String, threshold As Long, colorCode As Long)
+Sub HighlightHighInsertCounts(ws As Worksheet, colToHighlight As String, insertColName As String, threshold As Long, colorCode As Long)
     Dim workUnitCol As Range, insertCol As Range
     Dim insertValue As Variant
     Dim lastRow As Long, i As Long
 
-    Set workUnitCol = ws.Rows(1).Find(workUnitColName, LookIn:=xlValues, LookAt:=xlWhole)
+    Set workUnitCol = ws.Rows(1).Find(colToHighlight, LookIn:=xlValues, LookAt:=xlWhole)
     Set insertCol = ws.Rows(1).Find(insertColName, LookIn:=xlValues, LookAt:=xlWhole)
 
     If workUnitCol Is Nothing Or insertCol Is Nothing Then
-        MsgBox "Required columns '" & workUnitColName & "' or '" & insertColName & "' not found!", vbExclamation
+        MsgBox "Required columns '" & colToHighlight & "' or '" & insertColName & "' not found!", vbExclamation
         Exit Sub
     End If
 
@@ -503,23 +511,29 @@ Sub HighlightHighInsertCounts(ws As Worksheet, workUnitColName As String, insert
 End Sub
 
 ' For STEP 4
-Sub HighlightRemakes(ws As Worksheet, remColName As String, highlightColor As Long)
-    Dim remCol As Range
+Sub HighlightRowForCondition(ws As Worksheet, highlightCol As String, highlightColor As Long, condition As String, forCondition As Boolean = True)
+    Dim myCol As Range
     Dim lastRow As Long, lastCol As Long, i As Long
 
-    Set remCol = ws.Rows(1).Find(remColName, LookIn:=xlValues, LookAt:=xlWhole)
-    If remCol Is Nothing Then
-        MsgBox "`" & remColName & "` column was not found!", vbExclamation
+    Set myCol = ws.Rows(1).Find(highlightCol, LookIn:=xlValues, LookAt:=xlWhole)
+    If myCol Is Nothing Then
+        MsgBox "`" & highlightCol & "` column was not found!", vbExclamation
         Exit Sub
     End If
 
-    lastRow = ws.Cells(ws.Rows.count, remCol.Column).End(xlUp).Row
+    lastRow = ws.Cells(ws.Rows.count, myCol.Column).End(xlUp).Row
     lastCol = ws.Cells(1, ws.Columns.count).End(xlToLeft).Column
 
     For i = 2 To lastRow
-        If Trim(ws.Cells(i, remCol.Column).Value) <> "" Then
-            ws.Range(ws.Cells(i, 1), ws.Cells(i, lastCol)).Interior.Color = highlightColor
-        End If
+        If forCondition
+            If Trim(ws.Cells(i, myCol.Column).Value) = condition Then
+                ws.Range(ws.Cells(i, 1), ws.Cells(i, lastCol)).Interior.Color = highlightColor
+            End If
+        Else
+            If Trim(ws.Cells(i, myCol.Column).Value) <> condition Then
+                ws.Range(ws.Cells(i, 1), ws.Cells(i, lastCol)).Interior.Color = highlightColor
+            End if
+        End if
     Next i
 End Sub
 
@@ -758,6 +772,28 @@ Sub FormatSummaryTable(ws As Worksheet, startRow As Long, endRow As Long)
         .Color = vbBlack
         .Weight = xlThin
     End With
+End Sub
+
+Sub HighlightRoyalMail(ws As Worksheet, colNameToHighlight As String, condition As String, colorCode As Long)
+    Dim colToHighlight As Range
+    Dim fieldValue As Variant
+    Dim lastRow As Long, i As Long
+
+    Set colToHighlight = ws.Rows(1).Find(colNameToHighlight, LookIn:=xlValues, LookAt:=xlWhole)
+
+    If colToHighlight Is Nothing Then
+        MsgBox "Required column '" & colToHighlight & "' not found!", vbExclamation
+        Exit Sub
+    End If
+
+    lastRow = ws.Cells(ws.Rows.count, colToHighlight.Column).End(xlUp).Row
+
+    For i = 2 To lastRow
+        fieldValue = ws.Cells(i, colToHighlight.Column).Value
+        If fieldValue = condition Then
+            ws.Cells(i, workUnitCol.Column).Interior.Color = colorCode
+        End If
+    Next i
 End Sub
 
 ' For SIDE STEP between 6 & 7 (1 of 2) & MergeMySheets()
