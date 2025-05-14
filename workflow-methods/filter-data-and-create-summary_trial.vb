@@ -121,13 +121,15 @@ Sub FilterDataAndCreateSummary()
 
     wsFilteredData.Columns(10).Delete ' delete (10)MAIL_ROUTE
     wsFilteredData.Columns(9).Delete ' delete (9)STD_MAIL_PROVIDER_CD
-    ' wsFilteredData.Columns(8).Delete ' delete (8)MST_MAIL_PROVIDER_CD ' BUT, potentially keep this one AND then add logic to highlight "R" for Royal Mail
     
     ' Highlight Royal Mail
     Call HighlightRoyalMail(wsFilteredData, "MST_MAIL_PROVIDER_CD", "R", RGB(255, 51, 51)) 
 
     ' UPDATE COLUMN NAME
     wsFilteredData.Cells(1, mailProviderCol.Column).Value = "MAIL PROVIDER"
+
+    ' Comment out the below line if we want to delete Mail Provider Column
+    ' wsFilteredData.Columns(8).Delete ' delete (8)MAIL PROVIDER
 
     ' /*
     ' SIDE (non-essential) STEP: DELETE special WORKSHEET AS WE WILL NO LONGER BE NEEDING IT.
@@ -140,6 +142,7 @@ Sub FilterDataAndCreateSummary()
     ' */
 
     Call AddTimestampToHeader(wsFilteredData)
+    Call AddPageNumberToHeader(wsFilteredData)
 
     ' /*
     ' STEP 7: HIGHLIGHT NEW ENTRIES (which will only execute if the 'previous' worksheet exists)
@@ -821,6 +824,13 @@ Sub AddTimestampToHeader(ws As Worksheet)
         .RightHeader = formattedDate
     End With
 End Sub
+
+Sub AddPageNumberToHeader(ws As Worksheet)
+    With ws.PageSetup
+        .LeftHeader = "Page: &P"
+    End With
+End Sub
+
 
 ' For STEP 7 (1 of 2) & MergeMySheets()
 Function SheetExists(sheetName As Variant) As Boolean
