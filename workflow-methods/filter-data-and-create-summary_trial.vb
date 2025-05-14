@@ -43,7 +43,7 @@ Sub FilterDataAndCreateSummary()
     ' */
 
     Dim wsOutersKey As Worksheet
-    Dim datasetCORPCol As Range, planTypeCol As Range, outerCol As Range, workOrderCol As Range
+    Dim datasetCORPCol As Range, planTypeCol As Range, outerCol As Range, workOrderCol As Range, mailProviderCol As Range
     Dim sortedOuters() As Collection
     Dim lastRowDataset As Long
 
@@ -58,6 +58,7 @@ Sub FilterDataAndCreateSummary()
     Set workOrderCol = wsFilteredData.Rows(1).Find("WORK_UNIT_CD")
     Set planTypeCol = wsFilteredData.Rows(1).Find("PLAN_TYPE_CD")
     Set outerCol = GetOrCreateColumn(wsFilteredData, "OUTER") ' outer column becomes the last column (11)
+    Set mailProviderCol = wsFilteredData.Rows(1).Find("MST_MAIL_PROVIDER_CD")
 
     lastRowDataset = GetLastRowBeforeBlanks(wsFilteredData, datasetCORPCol.Column)
     sortedOuters = BuildOuterLookup(wsOutersKey, "CORP_CD")
@@ -123,10 +124,10 @@ Sub FilterDataAndCreateSummary()
     ' wsFilteredData.Columns(8).Delete ' delete (8)MST_MAIL_PROVIDER_CD ' BUT, potentially keep this one AND then add logic to highlight "R" for Royal Mail
     
     ' Highlight Royal Mail
-    HighlightRoyalMail(wsFilteredData, "MST_MAIL_PROVIDER_CD", "R", RGB(255, 51, 51)) 
+    Call HighlightRoyalMail(wsFilteredData, "MST_MAIL_PROVIDER_CD", "R", RGB(255, 51, 51)) 
 
     ' UPDATE COLUMN NAME
-    wsFilteredData.Cells(1, colToHighlight.Column).Value = "MAIL PROVIDER"
+    wsFilteredData.Cells(1, mailProviderCol.Column).Value = "MAIL PROVIDER"
 
     ' /*
     ' SIDE (non-essential) STEP: DELETE special WORKSHEET AS WE WILL NO LONGER BE NEEDING IT.
@@ -525,7 +526,7 @@ Sub HighlightRowForCondition(ws As Worksheet, highlightCol As String, highlightC
     lastCol = ws.Cells(1, ws.Columns.count).End(xlToLeft).Column
 
     For i = 2 To lastRow
-        If forCondition
+        If forCondition Then
             If Trim(ws.Cells(i, myCol.Column).Value) = condition Then
                 ws.Range(ws.Cells(i, 1), ws.Cells(i, lastCol)).Interior.Color = highlightColor
             End If
@@ -791,7 +792,7 @@ Sub HighlightRoyalMail(ws As Worksheet, colNameToHighlight As String, condition 
     For i = 2 To lastRow
         fieldValue = ws.Cells(i, colToHighlight.Column).Value
         If fieldValue = condition Then
-            ws.Cells(i, workUnitCol.Column).Interior.Color = colorCode
+            ws.Cells(i, colToHighlight.Column).Interior.Color = colorCode
         End If
     Next i
 End Sub
