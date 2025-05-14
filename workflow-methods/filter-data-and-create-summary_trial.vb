@@ -30,6 +30,9 @@ Sub FilterDataAndCreateSummary()
     Set wsFilteredData = CreateFilteredDataSheet()
     If wsFilteredData Is Nothing Then Exit Sub
 
+    ' Inital column headings for wsFilteredData:
+    ' (1)PARENT_NM, (2)CORP_CD, (3)WORK_UNIT_CD, (4)STMT_CNT, (5)INSERT_CNT, (6)REM_MC_CNT, (7)PLAN_TYPE_CD, (8)MST_MAIL_PROVIDER_CD, 
+    ' (9)STD_MAIL_PROVIDER_CD, (10)MAIL_ROUTE
     keepList = Array("PARENT_NM", "CORP_CD", "WORK_UNIT_CD", "STMT_CNT", "INSERT_CNT", "REM_MC_CNT", "PLAN_TYPE_CD", "MST_MAIL_PROVIDER_CD", "STD_MAIL_PROVIDER_CD", "MAIL_ROUTE")
 
     Call CopyColumnsByHeader(wsSpecial, wsFilteredData, keepList)
@@ -54,7 +57,7 @@ Sub FilterDataAndCreateSummary()
     Set datasetCORPCol = wsFilteredData.Rows(1).Find("CORP_CD")
     Set workOrderCol = wsFilteredData.Rows(1).Find("WORK_UNIT_CD")
     Set planTypeCol = wsFilteredData.Rows(1).Find("PLAN_TYPE_CD")
-    Set outerCol = GetOrCreateColumn(wsFilteredData, "OUTER")
+    Set outerCol = GetOrCreateColumn(wsFilteredData, "OUTER") ' outer column becomes the last column (11)
 
     lastRowDataset = GetLastRowBeforeBlanks(wsFilteredData, datasetCORPCol.Column)
     sortedOuters = BuildOuterLookup(wsOutersKey, "CORP_CD")
@@ -97,9 +100,13 @@ Sub FilterDataAndCreateSummary()
 
     summaryData = GenerateOuterSummary(wsFilteredData, wsOutersKey, lastRowDataset)
 
+    ' COLUMNS:
+    ' (1)PARENT_NM, (2)CORP_CD, (3)WORK_UNIT_CD, (4)STMT_CNT, (5)INSERT_CNT, (6)REM_MC_CNT, (7)PLAN_TYPE_CD, (8)MST_MAIL_PROVIDER_CD, 
+    ' (9)STD_MAIL_PROVIDER_CD, (10)MAIL_ROUTE, (11)OUTERS
+
     If Is2DArrayEmpty(summaryData) Then
         wsFilteredData.Cells(lastRowDataset + 14, 1).Value = "No summary data available due to no mapped outers"
-        wsFilteredData.Columns(8).Delete ' delete column 8 (which is the outers column) because we have no mapped outers in this case
+        wsFilteredData.Columns(11).Delete ' delete (11)OUTERS because we have no mapped outers in this case
     Else
         summaryStartRow = lastRowDataset + 14
         summaryEndRow = summaryStartRow + UBound(summaryData, 2)
@@ -108,6 +115,10 @@ Sub FilterDataAndCreateSummary()
         Call SortSummary(wsFilteredData, summaryStartRow, summaryEndRow)
         Call FormatSummaryTable(wsFilteredData, summaryStartRow, summaryEndRow)
     End If
+
+    wsFilteredData.Columns(10).Delete ' delete (10)MAIL_ROUTE
+    wsFilteredData.Columns(9).Delete ' delete (9)STD_MAIL_PROVIDER_CD
+    wsFilteredData.Columns(8).Delete ' delete (8)MST_MAIL_PROVIDER_CD ' BUT, potentially keep this one AND then add logic to highlight "R" for Royal Mail
 
     ' /*
     ' SIDE (non-essential) STEP: DELETE special WORKSHEET AS WE WILL NO LONGER BE NEEDING IT.
