@@ -600,8 +600,15 @@ End Function
 ' For STEP 6 (2 of 5)
 Function GenerateOuterSummary(wsFilteredData As Worksheet, wsOutersKey As Worksheet, lastRowDataset As Long) As Variant
     Dim outerArray() As Variant, stmtSumArray() As Double, stockArray() As Variant
-    Dim outerValue As String, stmtValue As Double, remMCValue As Variant, planTypeValue As String
-    Dim stmtCNCol As Range, remMCCol As Range, planTypeCol As Range, outerCol As Range
+    Dim outerValue As String, stmtValue As Double, remMCValue As Variant, planTypeValue As String, parentNmValue As String, mailProviderValue As String
+
+    Dim c5OuterValue As String, c4OuterValue As String, dlOuterValue As String
+    Dim c5StockLocationValue As String, c4StockLocationValue As String, dlStockLocationValue As String
+
+    Dim c5WhistlOuterValue As String, c5DhlOuterValue As String, c5RmOuterValue As String, c4RmOuterValue As String, c4WhistlOuterValue As String
+    Dim c5WhistlStockLocationValue As String, c5DhlStockLocationValue As String, c5RmStockLocationValue As String, c4RmStockLocationValue As String, c4WhistlStockLocationValue As String
+    
+    Dim stmtCNCol As Range, remMCCol As Range, planTypeCol As Range, outerCol As Range, parentNmCol As Range, mailProviderCol As Range
     Dim summaryData As Variant
     Dim i As Long, idx As Long, lastRowOutersKey As Long
     Dim stockLocation As String
@@ -612,13 +619,35 @@ Function GenerateOuterSummary(wsFilteredData As Worksheet, wsOutersKey As Worksh
     Set stmtCNCol = wsFilteredData.Rows(1).Find("STMT_CNT")
     Set remMCCol = wsFilteredData.Rows(1).Find("REM_MC_CNT")
     Set planTypeCol = wsFilteredData.Rows(1).Find("PLAN_TYPE_CD")
+    Set parentNmCol = wsFilteredData.Rows(1).Find("PARENT_NM")
+    Set mailProviderCol = wsFilteredData.Rows(1).Find("MST_MAIL_PROVIDER_CD")
+
+    Set c5OuterCol = wsOutersKey.Rows(1).Find("C5_OUTER")
+    Set c4OuterCol = wsOutersKey.Rows(1).Find("C4_OUTER")
+    Set dlOuterCol = wsOutersKey.Rows(1).Find("DL_OUTER")
+
+    Set c5StockLocationCol = wsOutersKey.Rows(1).Find("C5_STOCK_LOCATION")
+    Set c4StockLocationCol = wsOutersKey.Rows(1).Find("C4_STOCK_LOCATION")
+    Set dlStockLocationCol = wsOutersKey.Rows(1).Find("DL_STOCK_LOCATION")
+
+    Set c5WhistlOuterCol = wsOutersKey.Rows(1).Find("C5_WHISTL_OUTER")
+    Set c5DhlOuterCol = wsOutersKey.Rows(1).Find("C5_DHL_OUTER")
+    Set c5RmOuterCol = wsOutersKey.Rows(1).Find("C5_RM_OUTER")
+    Set c4RmOuterCol = wsOutersKey.Rows(1).Find("C4_RM_OUTER")
+    Set c4WhistlOuterCol = wsOutersKey.Rows(1).Find("C4_WHISTL_OUTER")
+
+    Set c5WhistlStockLocationCol = wsOutersKey.Rows(1).Find("C5_WHISTL_STOCK_LOCATION")
+    Set c5DhlStockLocationCol = wsOutersKey.Rows(1).Find("C5_DHL_STOCK_LOCATION")
+    Set c5RmStockLocationCol = wsOutersKey.Rows(1).Find("C5_RM_STOCK_LOCATION")
+    Set c4RmStockLocationCol = wsOutersKey.Rows(1).Find("C4_RM_STOCK_LOCATION")
+    Set c4WhistlStockLocationCol = wsOutersKey.Rows(1).Find("C4_WHISTL_STOCK_LOCATION")
 
     If outerCol Is Nothing Or stmtCNCol Is Nothing Or remMCCol Is Nothing Or planTypeCol Is Nothing Then
         MsgBox "Required columns for summary not found!", vbExclamation
         Exit Function
     End If
 
-    lastRowOutersKey = wsOutersKey.Cells(wsOutersKey.Rows.count, 1).End(xlUp).Row
+    lastRowOutersKey = wsOutersKey.Cells(wsOutersKey.Rows.Count, 1).End(xlUp).Row
 
     ' Initialize arrays
     ReDim outerArray(1 To 1)
@@ -628,10 +657,13 @@ Function GenerateOuterSummary(wsFilteredData As Worksheet, wsOutersKey As Worksh
     idx = 0
 
     For i = 2 To lastRowDataset
+        ' Get values for current row
         outerValue = Trim(wsFilteredData.Cells(i, outerCol.Column).Value)
         planTypeValue = Trim(wsFilteredData.Cells(i, planTypeCol.Column).Value)
         stmtValue = wsFilteredData.Cells(i, stmtCNCol.Column).Value
         remMCValue = wsFilteredData.Cells(i, remMCCol.Column).Value
+        parentNmValue = wsFilteredData.Cells(i, parentNmCol.Column).Value
+        mailProviderValue = wsFilteredData.Cells(i, mailProviderCol.Column).Value
 
         ' Use REM_MC_CNT if it exists
         If Not IsEmpty(remMCValue) And IsNumeric(remMCValue) Then
@@ -656,21 +688,98 @@ Function GenerateOuterSummary(wsFilteredData As Worksheet, wsOutersKey As Worksh
 
                 ' Match in outerskey
                 For j = 2 To lastRowOutersKey
+                    ' Get values from outerskey for current row
+                    c5OuterValue = wsOutersKey.Cells(j, c5OuterCol.Column).Value
+                    c4OuterValue = wsOutersKey.Cells(j, c4OuterCol.Column).Value
+                    dlOuterValue = wsOutersKey.Cells(j, dlOuterCol.Column).Value
+
+                    c5StockLocationValue = wsOutersKey.Cells(j, c5StockLocationCol.Column).Value
+                    c4StockLocationValue = wsOutersKey.Cells(j, c4StockLocationCol.Column).Value
+                    dlStockLocationValue = wsOutersKey.Cells(j, dlStockLocationCol.Column).Value
+
+                    c5WhistlOuterValue = wsOutersKey.Cells(j, c5WhistlOuterCol.Column).Value
+                    c5DhlOuterValue = wsOutersKey.Cells(j, c5DhlOuterCol.Column).Value
+                    c5RmOuterValue = wsOutersKey.Cells(j, c5RmOuterCol.Column).Value
+                    c4RmOuterValue = wsOutersKey.Cells(j, c4RmOuterCol.Column).Value
+                    c4WhistlOuterValue = wsOutersKey.Cells(j, c4WhistlOuterCol.Column).Value
+
+                    c5WhistlStockLocationValue = wsOutersKey.Cells(j, c5WhistlStockLocationCol.Column).Value
+                    c5DhlStockLocationValue = wsOutersKey.Cells(j, c5DhlStockLocationCol.Column).Value
+                    c5RmStockLocationValue = wsOutersKey.Cells(j, c5RmStockLocationCol.Column).Value
+                    c4RmStockLocationValue = wsOutersKey.Cells(j, c4RmStockLocationCol.Column).Value
+                    c4WhistlStockLocationValue = wsOutersKey.Cells(j, c4WhistlStockLocationCol.Column).Value
+
+                    ' C4 LOGIC
                     If planTypeValue = "V" Or planTypeValue = "F" Then
-                        If wsOutersKey.Cells(j, 3).Value = outerValue Then
-                            stockLocation = wsOutersKey.Cells(j, 6).Value
-                            matched = True
-                            Exit For
+                        If parentNmValue = "Santander Banking" Then
+                            ' SANTANDER ONLY
+                            If mailProviderValue = "R" Then
+                                If c4RmOuterValue = outerValue Then
+                                    stockLocation = c4RmStockLocationValue ' C4 RM
+                                    matched = True
+                                    Exit For
+                                End If
+                            ElseIf mailProviderValue = "T" Then
+                                If c4WhistlOuterValue = outerValue Then
+                                    stockLocation = c4WhistlStockLocationValue ' C4 WHISTL
+                                    matched = True
+                                    Exit For
+                                End If
+                            End If
+                        Else
+                            ' NOT SANTANDER
+                            If c4OuterValue = outerValue Then
+                                stockLocation = c4OuterValue ' C4
+                                matched = True
+                                Exit For
+                            End If
                         End If
                     Else
-                        If wsOutersKey.Cells(j, 2).Value = outerValue Then
-                            stockLocation = wsOutersKey.Cells(j, 5).Value
-                            matched = True
-                            Exit For
-                        ElseIf wsOutersKey.Cells(j, 4).Value = outerValue Then
-                            stockLocation = wsOutersKey.Cells(j, 7).Value
-                            matched = True
-                            Exit For
+                        ' C5 LOGIC
+                        If parentNmValue = "Santander Banking" Then
+                            ' SANTANDER ONLY
+                            If mailProviderValue = "R" Then
+                                If c5RmOuterValue = outerValue Then
+                                    stockLocation = c5RmStockLocationValue ' C5 RM
+                                    matched = True
+                                    Exit For
+                                ElseIf dlOuterValue = outerValue Then
+                                    stockLocation = dlStockLocationValue ' DL
+                                    matched = True
+                                    Exit For
+                                End If
+                            ElseIf mailProviderValue = "T" Then
+                                If c5WhistlOuterValue = outerValue Then
+                                    stockLocation = c5WhistlStockLocationValue ' C5 WHISTL
+                                    matched = True
+                                    Exit For
+                                ElseIf dlOuterValue = outerValue Then
+                                    stockLocation = dlStockLocationValue ' DL
+                                    matched = True
+                                    Exit For
+                                End If
+                            ElseIf mailProviderValue = "Y" Then
+                                If c5DhlOuterValue = outerValue Then
+                                    stockLocation = c5DhlStockLocationValue ' C5 DHL
+                                    matched = True
+                                    Exit For
+                                ElseIf dlOuterValue = outerValue Then
+                                    stockLocation = dlStockLocationValue ' DL
+                                    matched = True
+                                    Exit For
+                                End If
+                            End If
+                        Else
+                            ' NOT SANTANDER
+                            If c5OuterValue = outerValue Then
+                                stockLocation = c5StockLocationValue ' C5
+                                matched = True
+                                Exit For
+                            ElseIf dlOuterValue = outerValue Then
+                                stockLocation = dlStockLocationValue ' DL
+                                matched = True
+                                Exit For
+                            End If
                         End If
                     End If
                 Next j
