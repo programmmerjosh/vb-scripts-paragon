@@ -1,4 +1,4 @@
-' Working refactored version -> CURRENTLY IN TEST PHASE
+' Working version: NOT including Santander Logic
 
 Sub FilterDataAndCreateSummary()
     ' Define constants

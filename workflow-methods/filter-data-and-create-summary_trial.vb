@@ -1,5 +1,5 @@
 
-' Working refactored version -> CURRENTLY IN TEST PHASE
+' Santander Logic added -> CURRENTLY IN TEST PHASE
 
 Sub FilterDataAndCreateSummary()
     ' Define constants
