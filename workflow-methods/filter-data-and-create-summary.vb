@@ -120,50 +120,70 @@ Sub FilterDataAndCreateSummary()
 
     Call AddTimestampToHeader(wsFilteredData)
 
-    ' /*
-    ' STEP 7: HIGHLIGHT NEW ENTRIES (which will only execute if the 'previous' worksheet exists)
-    ' */
-    Dim arrLatestWorkOrders As Variant, arrPreviousWorkOrders As Variant
-    Dim wsPreviousFilteredData As Worksheet
-    Dim lastRowPreviousDataset As Long
-    Dim prevStmtCol As Range
+' ==========================
+' STEP 7: HIGHLIGHT NEW ENTRIES (if 'previous' sheet exists)
+' ==========================
+Dim arrLatestWorkOrders As Variant
+Dim arrPreviousWorkOrders As Variant
+Dim wsPreviousFilteredData As Worksheet
+Dim lastRowPreviousDataset As Long
+Dim prevStmtCol As Range
 
-    If SheetExists("previous") Then
-        Set wsPreviousFilteredData = ThisWorkbook.Sheets("previous")
-        Set prevStmtCol = wsPreviousFilteredData.Rows(1).Find("STMT_CNT")
+If SheetExists("previous") Then
+    Set wsPreviousFilteredData = ThisWorkbook.Sheets("previous")
+    Set prevStmtCol = wsPreviousFilteredData.Rows(1).Find("STMT_CNT")
 
-        If Not prevStmtCol Is Nothing Then
-            lastRowPreviousDataset = GetLastRowBeforeBlanks(wsPreviousFilteredData, prevStmtCol.Column)
-        Else
-            MsgBox "`STMT_CNT` column not found in 'previous' sheet!", vbExclamation
-            Exit Sub
-        End If
+    If Not prevStmtCol Is Nothing Then
+        lastRowPreviousDataset = GetLastRowBeforeBlanks(wsPreviousFilteredData, prevStmtCol.Column)
+    Else
+        MsgBox "`STMT_CNT` column not found in 'previous' sheet!", vbExclamation
+        ' Continue anyway; we still want to export summaries
+    End If
 
+    ' Load work orders arrays if previous sheet exists
+    If Not prevStmtCol Is Nothing Then
         arrLatestWorkOrders = GetWorkUnitArray(wsFilteredData, "WORK_UNIT_CD", lastRowDataset)
         arrPreviousWorkOrders = GetWorkUnitArray(wsPreviousFilteredData, "WORK_UNIT_CD", lastRowPreviousDataset)
 
         Call HighlightNewWorkOrders(wsFilteredData, arrPreviousWorkOrders, arrLatestWorkOrders, "CORP_CD", cBlue)
-    Else
-        MsgBox "The script has run successfully!!", vbInformation
-        MsgBox "Important Note: `previous` worksheet is missing. Rename `FilteredData` to `previous` before you run this script again to see the new entries.", vbInformation
-        Exit Sub
     End If
+Else
+    ' No previous sheet, just notify the user
+    MsgBox "Important Note: `previous` worksheet is missing." & vbCrLf & _
+           "Rename `FilteredData` to `previous` before you run this script again to see new entries.", vbInformation
+End If
 
-    ' /*
-    ' STEP 8: IDENTIFY MISSING VALUES AND APPEND TO SUMMARY
-    ' */
-
+' ==========================
+' STEP 8: IDENTIFY MISSING VALUES AND APPEND TO SUMMARY
+' ==========================
+' Only if arrPreviousWorkOrders exists, otherwise skip
+If Not IsEmpty(arrPreviousWorkOrders) Then
     Call AppendMissingWorkUnits(wsFilteredData, arrPreviousWorkOrders, arrLatestWorkOrders, summaryEndRow)
+End If
 
-    ' /*
-    ' SIDE (non-essential) STEP: DELETE `previous` WORKSHEET AS WE WILL NO LONGER BE NEEDING IT.
-    ' */
+' ==========================
+' STEP 8a: EXPORT OUTERS SUMMARY, RETURN OUTERS, AND ENCLOSED JOBS
+' ==========================
+Dim arrReturnOuters As Variant
 
-    Call DeleteSheetIfExists("previous")
-    
-    MsgBox "The script has run successfully!!", vbInformation
+If SheetExists("previous") Then
+    ' Previous exists -> generate Return Outers
+    arrReturnOuters = GenerateReturnOuters(wsPreviousFilteredData, wsFilteredData)
+Else
+    ' No previous sheet -> Return Outers is empty
+    arrReturnOuters = Array()
+End If
 
-End Sub
+' Export Outers Summary, Return Outers, and Enclosed Jobs
+Call ExportOutersData(wsFilteredData, summaryData, arrReturnOuters)
+
+' ==========================
+' SIDE STEP: DELETE 'previous' WORKSHEET (optional)
+' ==========================
+Call DeleteSheetIfExists("previous")
+
+MsgBox "The script has run successfully!!", vbInformation
+
 
 ' === Supporting Functions Of FilterDataAndCreateSummary() [START] ===
 
@@ -826,3 +846,114 @@ Sub AppendMissingWorkUnits(ws As Worksheet, arrPrevious As Variant, arrLatest As
     End If
 End Sub
 ' === Supporting Functions Of FilterDataAndCreateSummary() [END] ===
+
+' NEW HELPERS
+Function GenerateReturnOuters(wsPreviousSummary As Worksheet, wsCurrentSummary As Worksheet) As Variant
+    Dim prevOuters As Collection, currOuters As Collection
+    Dim lastRowPrev As Long, lastRowCurr As Long
+    Dim outerColPrev As Range, outerColCurr As Range
+    Dim stockColPrev As Range
+    Dim i As Long, idx As Long
+    Dim results() As Variant
+    Dim exists As Boolean
+    
+    Set prevOuters = New Collection
+    Set currOuters = New Collection
+    
+    ' Find OUTER and STOCK_LOCATION columns (row 1, summary sheet)
+    Set outerColPrev = wsPreviousSummary.Rows(1).Find("OUTER")
+    Set outerColCurr = wsCurrentSummary.Rows(1).Find("OUTER")
+    Set stockColPrev = wsPreviousSummary.Rows(1).Find("STOCK_LOCATION")
+    
+    If outerColPrev Is Nothing Or outerColCurr Is Nothing Or stockColPrev Is Nothing Then
+        MsgBox "Required columns (`OUTER` or `STOCK_LOCATION`) not found in summary sheets!", vbExclamation
+        Exit Function
+    End If
+    
+    ' Last rows
+    lastRowPrev = GetLastRowBeforeBlanks(wsPreviousSummary, outerColPrev.Column)
+    lastRowCurr = GetLastRowBeforeBlanks(wsCurrentSummary, outerColCurr.Column)
+    
+    ' Load current outers into collection
+    For i = 2 To lastRowCurr
+        If Trim(wsCurrentSummary.Cells(i, outerColCurr.Column).Value) <> "" Then
+            On Error Resume Next
+            currOuters.Add Trim(wsCurrentSummary.Cells(i, outerColCurr.Column).Value), CStr(Trim(wsCurrentSummary.Cells(i, outerColCurr.Column).Value))
+            On Error GoTo 0
+        End If
+    Next i
+    
+    ' Compare previous outers against current
+    idx = 0
+    For i = 2 To lastRowPrev
+        Dim prevOuter As String
+        prevOuter = Trim(wsPreviousSummary.Cells(i, outerColPrev.Column).Value)
+        If prevOuter <> "" Then
+            exists = False
+            On Error Resume Next
+            currOuters.Item prevOuter
+            If Err.Number = 0 Then exists = True
+            Err.Clear
+            On Error GoTo 0
+            
+            If Not exists Then
+                idx = idx + 1
+                ReDim Preserve results(1 To 2, 1 To idx)
+                results(1, idx) = prevOuter
+                results(2, idx) = wsPreviousSummary.Cells(i, stockColPrev.Column).Value
+            End If
+        End If
+    Next i
+    
+    If idx = 0 Then
+        GenerateReturnOuters = Array() ' empty
+    Else
+        GenerateReturnOuters = results
+    End If
+End Function
+
+
+
+Sub ExportOutersData(wsFiltered As Worksheet, summaryData As Variant, returnOuters As Variant)
+    Dim wsSummary As Worksheet, wsReturn As Worksheet, wsEnclosed As Worksheet
+    Dim i As Long
+    
+    ' --- Outers Summary ---
+    On Error Resume Next
+    Set wsSummary = ThisWorkbook.Sheets("OutersSummary")
+    If wsSummary Is Nothing Then Set wsSummary = ThisWorkbook.Sheets.Add
+    wsSummary.Name = "OutersSummary"
+    wsSummary.Cells.Clear
+    On Error GoTo 0
+    
+    If Not Is2DArrayEmpty(summaryData) Then
+        Call WriteSummaryTable(wsSummary, summaryData, 2)
+    End If
+    
+    ' --- Return Outers ---
+    On Error Resume Next
+    Set wsReturn = ThisWorkbook.Sheets("ReturnOuters")
+    If wsReturn Is Nothing Then Set wsReturn = ThisWorkbook.Sheets.Add
+    wsReturn.Name = "ReturnOuters"
+    wsReturn.Cells.Clear
+    On Error GoTo 0
+    
+    If Not Is2DArrayEmpty(returnOuters) Then
+        wsReturn.Cells(1, 1).Value = "OUTER"
+        wsReturn.Cells(1, 2).Value = "STOCK_LOCATION"
+        For i = 1 To UBound(returnOuters, 2)
+            wsReturn.Cells(i + 1, 1).Value = returnOuters(1, i)
+            wsReturn.Cells(i + 1, 2).Value = returnOuters(2, i)
+        Next i
+    End If
+    
+    ' --- Enclosed Jobs ---
+    On Error Resume Next
+    Set wsEnclosed = ThisWorkbook.Sheets("EnclosedJobs")
+    If wsEnclosed Is Nothing Then Set wsEnclosed = ThisWorkbook.Sheets.Add
+    wsEnclosed.Name = "EnclosedJobs"
+    wsEnclosed.Cells.Clear
+    On Error GoTo 0
+    
+    ' Optional: populate EnclosedJobs if needed
+End Sub
